@@ -1,0 +1,10 @@
+.vscode/
+**/node_modules/
+**/dist/
+transcendaire.db
+update_test.sh
+note.txt
+t.sh
+pr.md
+pr.md
+server/uploads/*

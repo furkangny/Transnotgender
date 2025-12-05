@@ -1,0 +1,56 @@
+services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: transcendence-nginx
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    depends_on:
+      client:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
+    volumes:
+      - client-build:/usr/share/nginx/html:ro
+    networks:
+      - transcendence
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile
+    container_name: transcendence-server
+    expose:
+      - "8080"
+    volumes:
+      - database-volume:/app/data
+      - avatar-uploads:/app/uploads
+    networks:
+      - transcendence
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - DB_PATH=/app/data/transcendaire.db
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile
+    container_name: transcendence-client
+    volumes:
+      - client-build:/output
+    networks:
+      - transcendence
+
+volumes:
+  client-build:
+  database-volume:
+  avatar-uploads:
+
+networks:
+  transcendence:
+    driver: bridge

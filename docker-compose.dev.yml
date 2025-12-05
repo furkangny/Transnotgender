@@ -1,0 +1,49 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile.dev
+    container_name: transcendence-server-dev
+
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
+    volumes:
+      - ./server/src:/app/src:ro
+      - ./shared/src:/shared/src:ro
+      - ./server/uploads:/app/uploads
+      - dev-database:/app/data
+      - /app/node_modules
+
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - DB_PATH=/app/data/transcendaire.db
+
+    networks:
+      - transcendence
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile.dev
+    container_name: transcendence-client-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client/src:/app/src:ro
+      - ./client/public:/app/public:ro
+      - ./client/index.html:/app/index.html:ro
+      - ./shared/src:/shared/src:ro
+      - /app/node_modules
+    networks:
+      - transcendence
+
+volumes:
+  dev-database:
+
+networks:
+  transcendence:
+    driver: bridge

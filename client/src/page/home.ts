@@ -1,0 +1,461 @@
+// import { registerPageInitializer, navigate } from "../router.js";
+// import { inputParserClass } from "../components/inputParser.js";
+// import { wsClient } from "../components/WebSocketClient.js";
+// import { getEl , show, hide, setupGlobalModalEvents } from "../app.js";
+import { checkAuthentication, getUserWithCookies, broadcastAuthEvent, initAuth } from "./auth.js";
+
+import { registerPageInitializer, navigate } from "../router";
+import { inputParserClass } from "../components/inputParser";
+import { wsClient, getWebSocketUrl } from "../components/WebSocketClient";
+import { getEl, show, hide, setupGlobalModalEvents } from "../app";
+import { initGoogle, triggerGoogleLogin } from "../components/googleAuth";
+
+export let isLoggedIn: boolean = false;
+export let playerName: string = "";
+
+async function initHomePage() {
+    const gameModeModal = getEl("gameModeModal")
+    const fastGameModal = getEl("fastGameModal")
+    const aiGameModal = getEl("aiGameModal")
+    const loginModal = getEl("loginModal")
+    const signinModal = getEl("signinModal")
+    const waitingModal = getEl("waitingModal")
+    const playButton = getEl("playButton") as HTMLButtonElement
+    const redirect = getEl("signinRedirect") as HTMLButtonElement
+
+	
+	initAuth((alias?: string) => {
+		if (alias) {
+			playerName = alias;
+			isLoggedIn = true;
+			connectWebSocketForStatus();
+		} else {
+			playerName = "";
+			isLoggedIn = false;
+		}
+		updateUI();
+	});
+	
+	console.log(`playerName : ${playerName} is loggedIn ${isLoggedIn}`);
+
+    await initGoogle();
+
+    updateUI();
+
+    setupWebsocket(waitingModal);
+
+    getEl("cancelGameModeButton").addEventListener('click', () => hide(gameModeModal));
+    getEl("profileButton").addEventListener('click', () => navigate("profile"));
+	getEl("friendsButton").addEventListener('click', () => navigate("friends"));
+    getEl("logoutButton").addEventListener('click', logout)
+
+    playButton.addEventListener('click', async () => {
+        if (await checkAuthentication())
+            show(gameModeModal)
+        else
+            show(loginModal)
+    })
+
+    redirect.addEventListener('click', () => {
+        hide(loginModal)
+        show(signinModal)
+    })
+
+    initWaitingModal(waitingModal)
+    initLoginModal(loginModal)
+    initsigninModal(signinModal)
+    initGameModeModal(gameModeModal, fastGameModal, aiGameModal)
+    initFastGameModal(fastGameModal, gameModeModal)
+    initAIGameModal(aiGameModal, gameModeModal)
+}
+
+function initLoginModal(loginModal: HTMLElement) {
+    const loginButton = getEl("loginButton") as HTMLButtonElement;
+    const checkButton = getEl("checkInput") as HTMLButtonElement;
+    const cancelLoginButton = getEl("cancelLoginButton") as HTMLButtonElement;
+    const playerInput = getEl("usernameCheck") as HTMLInputElement;
+    const passwordInput = getEl("passwordCheck") as HTMLInputElement;
+
+    setupGlobalModalEvents(loginModal, loginButton, cancelLoginButton);
+
+    const connect = async () => {
+        console.log('Connect button clicked\n')
+        const password = passwordInput.value;
+        const username = playerInput.value;
+
+        console.log(`username = ${username}`)
+        console.log(`password = ${password}`)
+
+		try {
+			const response = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					login: username,
+					password
+				})
+			});
+			const data = await response.json();
+			if (!response.ok)
+			{
+				alert(data.error || 'Erreur lors de la connexion');
+				return ;
+			}
+			playerName = data.alias;
+			isLoggedIn = true;
+			hide(loginModal)
+			updateUI();
+			connectWebSocketForStatus();
+			broadcastAuthEvent('login');
+
+        } catch (error) {
+            const message = String(error);
+            console.error('Erreur (connect): ', message);
+            alert(message);
+        }
+    }
+    
+    getEl("googleLoginButton").addEventListener('click', triggerGoogleLogin);
+    checkButton.addEventListener('click', connect);
+    checkButton.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter') connect
+    });
+}
+
+async function initsigninModal(signinModal: HTMLElement) {
+    const signinButton = getEl("signinButton") as HTMLButtonElement;
+    const cancelSigninButton = getEl("cancelSigninButton") as HTMLButtonElement
+    const usernameInput = getEl("newUser") as HTMLInputElement;
+    const aliasInput = getEl("newAlias") as HTMLInputElement;
+    const passwordInput = getEl("createPassword") as HTMLInputElement;
+    const confirmPasswordInput = getEl("passwordConfirmation") as HTMLInputElement;
+    const checkSignInInput = getEl("checkSignInInput") as HTMLButtonElement;
+
+    setupGlobalModalEvents(signinModal, signinButton, cancelSigninButton);
+
+    const subscribe = async () => {
+
+        const username = usernameInput.value.trim();
+        const alias = aliasInput.value.trim();
+        const password = passwordInput.value.trim();
+        const passwordValidation = confirmPasswordInput.value.trim();
+
+
+        console.log('Form values:', { username, alias, password, passwordValidation });
+        console.log('confirmPasswordInput element:', confirmPasswordInput);
+        console.log('confirmPasswordInput value raw:', confirmPasswordInput.value);
+        try {
+            console.log('subscribe button clicked');
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    login: username,
+                    password,
+                    passwordValidation,
+                    alias
+                })
+            });
+
+			const data = await response.json();
+			if (!response.ok)
+			{
+				alert(data.error || 'Erreur lors de l\'inscription');
+				return ;
+			}
+			alert(data.message || 'Inscription réussie !');
+			playerName = alias;
+			isLoggedIn = true;
+			hide(signinModal);
+			updateUI()
+			connectWebSocketForStatus();
+			broadcastAuthEvent('login');
+		} catch (error) {
+			const message = String(error);
+			console.error('Erreur (subscribe): ', message);
+			alert(message);
+		}
+    }
+
+    checkSignInInput.onclick = subscribe;
+}
+
+function initGameModeModal(
+    gameModeModal: HTMLElement,
+    fastGameModal: HTMLElement,
+    aiGameModal: HTMLElement
+): void {
+    gameModeModal.addEventListener('click', (event) => {
+        if (event.target === gameModeModal)
+            hide(gameModeModal)
+    })
+
+    getEl("fastGameButton").addEventListener('click', () => {
+        hide(gameModeModal)
+        show(fastGameModal)
+    })
+
+    getEl("aiGameButton").addEventListener('click', () => {
+        hide(gameModeModal)
+        show(aiGameModal)
+    })
+
+    getEl("lobbiesButton").addEventListener('click', () => {
+        hide(gameModeModal)
+        navigate('lobby')
+    })
+}
+
+function initFastGameModal(fastGameModal: HTMLElement, gameModeModal: HTMLElement): void {
+    fastGameModal.addEventListener('click', (event) => {
+        if (event.target === fastGameModal)
+            hide(fastGameModal)
+    })
+
+    const join1v1 = async () => {
+        try {
+			if (await checkAuthentication() === false)
+			{
+				alert('Veuillez vous reconnecter');
+				navigate('home');
+				return ;
+			}
+            await wsClient.connect(getWebSocketUrl())
+            wsClient.setPendingAction(() => wsClient.joinGame(playerName))
+            wsClient.joinGame(playerName)
+        } catch (error) {
+            alert("Impossible de se connecter au serveur")
+        }
+    }
+
+    const joinCustom = async () => {
+        try {
+			if (await checkAuthentication() === false)
+			{
+				alert('Veuillez vous reconnecter');
+				navigate('home');
+				return ;
+			}
+            await wsClient.connect(getWebSocketUrl())
+            wsClient.setPendingAction(() => wsClient.joinCustomGame(playerName))
+            wsClient.joinCustomGame(playerName)
+        } catch (error) {
+            alert("Impossible de se connecter au serveur")
+        }
+    }
+
+    getEl("joinGameButton").addEventListener('click', join1v1)
+    getEl("joinCustomButton").addEventListener('click', joinCustom)
+    getEl("cancelFastGameButton").addEventListener('click', () => {
+        hide(fastGameModal)
+        show(gameModeModal)
+    })
+}
+
+function initAIGameModal(aiGameModal: HTMLElement, gameModeModal: HTMLElement): void {
+    aiGameModal.addEventListener('click', (event) => {
+        if (event.target === aiGameModal)
+            hide(aiGameModal)
+    })
+
+    const difficulty = createToggleGroup(['difficultyEasyButton', 'difficultyNormalButton'], 0);
+    const powerUps = createToggleGroup(['powerUpsOnButton', 'powerUpsOffButton'], 0);
+    const maxScore = createToggleGroup(['maxScore3Button', 'maxScore5Button', 'maxScore7Button', 'maxScore11Button', 'maxScore21Button'], 1);
+
+    getEl("launchAIGameButton").addEventListener('click', async () => {
+        try {
+			if (await checkAuthentication() === false)
+			{
+				navigate('home');
+				alert('Veuillez vous reconnecter');
+				return ;
+			}
+            const selectedDifficulty = parseInt(difficulty());
+            const selectedPowerUps = powerUps() === 'true';
+            const selectedMaxScore = parseInt(maxScore());
+            console.log(`game ${selectedDifficulty === 0 ? 'easy' : 'normal'} ${selectedPowerUps === true ? 'avec' : 'sans'} pouvoir de ${selectedMaxScore} points max `);
+            await wsClient.connect(getWebSocketUrl())
+            wsClient.setPendingAction(() => wsClient.joinAIGame(playerName, selectedDifficulty, selectedPowerUps, selectedMaxScore))
+            wsClient.joinAIGame(playerName, selectedDifficulty, selectedPowerUps, selectedMaxScore)
+        } catch (error) {
+            alert("Impossible de se connecter au serveur")
+        }
+    })
+
+    getEl("cancelAIGameButton").addEventListener('click', () => {
+        hide(aiGameModal)
+        show(gameModeModal)
+    })
+}
+
+function initWaitingModal(modal: HTMLElement) {
+    const cancelWaitButton = getEl("cancelWaitButton");
+
+    cancelWaitButton.addEventListener('click', () => {
+        wsClient.cancelQueue();
+        hide(modal);
+    });
+}
+
+
+/**
+ * @brief Connect to WebSocket to appear online to friends
+ * @details Called after login/register or when page loads with authenticated user
+ */
+async function connectWebSocketForStatus(): Promise<void>
+{
+	if (!playerName || playerName === '')
+		return
+	try {
+		await wsClient.connect(getWebSocketUrl())
+		wsClient.registerPlayer(playerName)
+		console.log(`[HOME] WebSocket connected for status: ${playerName}`)
+	} catch (error) {
+		console.log('[HOME] Failed to connect WebSocket for status:', error)
+	}
+}
+
+
+async function logout(): Promise<void>
+{
+	wsClient.disconnect()
+	try {
+		const res = await fetch('/api/auth/logout', {
+			method: 'POST',
+			credentials: 'same-origin'
+		});
+	} catch (error) {
+		console.log('erreur logout(): ', error);
+	}
+	isLoggedIn = false;
+	playerName = "";
+	updateUI();
+	broadcastAuthEvent('logout');
+}
+
+
+function createToggleGroup(buttonIds: string[], initialIndex: number = 0): () => string {
+    const activeClass = "flex-1 py-3 rounded-xl font-quency font-bold text-lg bg-sonpi16-orange text-sonpi16-black border-4 border-white transition-all duration-300";
+    const inactiveClass = "flex-1 py-3 rounded-xl font-quency font-bold text-lg bg-gray-600 text-gray-300 border-4 border-transparent transition-all duration-300 hover:bg-gray-500";
+
+    const buttons = buttonIds.map(id => getEl(id) as HTMLButtonElement);
+    let selectedIndex = initialIndex;
+
+    const update = () => {
+        buttons.forEach((btn, i) => {
+            btn.className = i === selectedIndex ? activeClass : inactiveClass;
+        });
+    };
+
+    buttons.forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+            selectedIndex = i;
+            update();
+        });
+    });
+
+    update();
+
+    console.log(buttons[selectedIndex]?.dataset?.value ?? String(selectedIndex));
+
+    return () => buttons[selectedIndex]?.dataset?.value ?? String(selectedIndex);
+}
+
+async function checkAuthenticationAndUpdateUI()
+{
+	console.log('[CHECK AUTHENTICATION AND UPDATE UI]')
+	if (await checkAuthentication())
+		return true;
+	playerName = "";
+	isLoggedIn = false;
+	// navigate('home');
+	updateUI();
+	return false;
+}
+
+function updateUI(): void {
+    const loginButton = getEl("loginButton");
+    const logoutButton = getEl("logoutButton");
+    const profileButton = getEl("profileButton");
+	const friendsButton = getEl('friendsButton');
+    const signinButton = getEl("signinButton");
+
+    if (isLoggedIn) {
+        hide(loginButton);
+        hide(signinButton);
+        show(logoutButton);
+        show(profileButton);
+		show(friendsButton);
+        console.log('[HOME] UI: Connecté');
+    } else {
+        show(loginButton);
+        show(signinButton);
+        hide(profileButton);
+		hide(friendsButton);
+        hide(logoutButton);
+        console.log('[HOME] UI: Non connecté');
+    }
+}
+
+function setupWebsocket(waitingModal: HTMLElement) {
+    wsClient.onWaitingForPlayer = () => {
+        console.log('waiting for player')
+        show(waitingModal);
+    }
+
+    wsClient.onGameStart = (playerRole: 'player1' | 'player2') => {
+        console.log(`[HOME] Jeu démarre! Rôle: ${playerRole}`);
+        sessionStorage.setItem('playerRole', playerRole);
+        hide(waitingModal);
+        navigate('game');
+    };
+
+    wsClient.onPlayerJoined = (playerCount: number) => {
+        const playerCountSpan = getEl("playerCount");
+        playerCountSpan.textContent = playerCount.toString();
+    };
+
+    wsClient.onAlreadyConnected = (name: string) => {
+        hide(waitingModal);
+        const shouldDisconnect = confirm(
+            `Vous êtes déjà connecté ailleurs avec le nom "${name}".\n\n` +
+            `Voulez-vous déconnecter l'autre session ?`
+        );
+        if (shouldDisconnect)
+            wsClient.forceDisconnectOther(name);
+        else
+            wsClient.clearPendingAction();
+    };
+
+    wsClient.onAlreadyInLobby = (name: string) => {
+        hide(waitingModal);
+        const shouldDisconnect = confirm(
+            `Vous êtes déjà dans un lobby avec le nom "${name}".\n\n` +
+            `Voulez-vous quitter l'autre lobby et continuer ?`
+        );
+        if (shouldDisconnect)
+            wsClient.forceDisconnectOther(name);
+        else
+            wsClient.clearPendingAction();
+    };
+
+    wsClient.onAlreadyInGame = (name: string) => {
+        hide(waitingModal);
+        const shouldDisconnect = confirm(
+            `Vous êtes déjà en jeu avec le nom "${name}".\n\n` +
+            `Voulez-vous quitter la partie et continuer ?`
+        );
+        if (shouldDisconnect)
+            wsClient.forceDisconnectOther(name);
+        else
+            wsClient.clearPendingAction();
+    };
+
+    wsClient.onDisconnectedByOtherSession = () => {
+        alert('Vous avez été déconnecté car une autre session a pris le relais.');
+        wsClient.disconnect();
+        hide(waitingModal);
+    };
+}
+
+registerPageInitializer('home', initHomePage);
