@@ -98,7 +98,7 @@ function initLoginModal(loginModal: HTMLElement) {
 			const data = await response.json();
 			if (!response.ok)
 			{
-				alert(data.error || 'Erreur lors de la connexion');
+				alert(data.error || 'Giriş sırasında hata oluştu');
 				return ;
 			}
 			playerName = data.alias;
@@ -110,7 +110,7 @@ function initLoginModal(loginModal: HTMLElement) {
 
         } catch (error) {
             const message = String(error);
-            console.error('Erreur (connect): ', message);
+            console.error('Error (connect): ', message);
             alert(message);
         }
     }
@@ -160,10 +160,10 @@ async function initsigninModal(signinModal: HTMLElement) {
 			const data = await response.json();
 			if (!response.ok)
 			{
-				alert(data.error || 'Erreur lors de l\'inscription');
+				alert(data.error || 'Kayıt sırasında hata oluştu');
 				return ;
 			}
-			alert(data.message || 'Inscription réussie !');
+			alert(data.message || 'Kayıt başarılı!');
 			playerName = alias;
 			isLoggedIn = true;
 			hide(signinModal);
@@ -172,7 +172,7 @@ async function initsigninModal(signinModal: HTMLElement) {
 			broadcastAuthEvent('login');
 		} catch (error) {
 			const message = String(error);
-			console.error('Erreur (subscribe): ', message);
+			console.error('Error (subscribe): ', message);
 			alert(message);
 		}
     }
@@ -216,7 +216,7 @@ function initFastGameModal(fastGameModal: HTMLElement, gameModeModal: HTMLElemen
         try {
 			if (await checkAuthentication() === false)
 			{
-				alert('Veuillez vous reconnecter');
+				alert('Lütfen tekrar giriş yapın');
 				navigate('home');
 				return ;
 			}
@@ -224,7 +224,7 @@ function initFastGameModal(fastGameModal: HTMLElement, gameModeModal: HTMLElemen
             wsClient.setPendingAction(() => wsClient.joinGame(playerName))
             wsClient.joinGame(playerName)
         } catch (error) {
-            alert("Impossible de se connecter au serveur")
+            alert("Sunucuya bağlanılamıyor")
         }
     }
 
@@ -232,7 +232,7 @@ function initFastGameModal(fastGameModal: HTMLElement, gameModeModal: HTMLElemen
         try {
 			if (await checkAuthentication() === false)
 			{
-				alert('Veuillez vous reconnecter');
+				alert('Lütfen tekrar giriş yapın');
 				navigate('home');
 				return ;
 			}
@@ -240,7 +240,7 @@ function initFastGameModal(fastGameModal: HTMLElement, gameModeModal: HTMLElemen
             wsClient.setPendingAction(() => wsClient.joinCustomGame(playerName))
             wsClient.joinCustomGame(playerName)
         } catch (error) {
-            alert("Impossible de se connecter au serveur")
+            alert("Sunucuya bağlanılamıyor")
         }
     }
 
@@ -267,18 +267,18 @@ function initAIGameModal(aiGameModal: HTMLElement, gameModeModal: HTMLElement): 
 			if (await checkAuthentication() === false)
 			{
 				navigate('home');
-				alert('Veuillez vous reconnecter');
+				alert('Lütfen tekrar giriş yapın');
 				return ;
 			}
             const selectedDifficulty = parseInt(difficulty());
             const selectedPowerUps = powerUps() === 'true';
             const selectedMaxScore = parseInt(maxScore());
-            console.log(`game ${selectedDifficulty === 0 ? 'easy' : 'normal'} ${selectedPowerUps === true ? 'avec' : 'sans'} pouvoir de ${selectedMaxScore} points max `);
+            console.log(`game ${selectedDifficulty === 0 ? 'easy' : 'normal'} ${selectedPowerUps === true ? 'with' : 'without'} power of ${selectedMaxScore} max points`);
             await wsClient.connect(getWebSocketUrl())
             wsClient.setPendingAction(() => wsClient.joinAIGame(playerName, selectedDifficulty, selectedPowerUps, selectedMaxScore))
             wsClient.joinAIGame(playerName, selectedDifficulty, selectedPowerUps, selectedMaxScore)
         } catch (error) {
-            alert("Impossible de se connecter au serveur")
+            alert("Sunucuya bağlanılamıyor")
         }
     })
 
@@ -325,7 +325,7 @@ async function logout(): Promise<void>
 			credentials: 'same-origin'
 		});
 	} catch (error) {
-		console.log('erreur logout(): ', error);
+		console.log('error logout(): ', error);
 	}
 	isLoggedIn = false;
 	playerName = "";

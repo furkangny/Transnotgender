@@ -118,11 +118,11 @@ export class Tournament {
 	public addPlayerToTournament(alias: string, socket?: WebSocket): void
 	{
 		if (this.status === TournamentStatus.RUNNING)
-			throw new TournamentError(`Impossible d'ajouter ${alias} au tournoi ${this.name}: le tournoi a déjà débuté`, errTournament.ALREADY_STARTED);
+			throw new TournamentError(`${alias} oyuncusu ${this.name} turnuvasına eklenemiyor: turnuva zaten başladı`, errTournament.ALREADY_STARTED);
 		if (this.status === TournamentStatus.COMPLETED)
-			throw new TournamentError(`Impossible d'ajouter ${alias} au tournoi ${this.name}: le tournoi est terminé`, errTournament.ALREADY_OVER);
+			throw new TournamentError(`${alias} oyuncusu ${this.name} turnuvasına eklenemiyor: turnuva sona erdi`, errTournament.ALREADY_OVER);
 		if (this.players.size === this.maxPlayers)
-			throw new TournamentError(`Impossible d'ajouter ${alias} au tournoi ${this.name}: le tournoi est complet`, errTournament.TOURNAMENT_FULL);
+			throw new TournamentError(`${alias} oyuncusu ${this.name} turnuvasına eklenemiyor: turnuva dolu`, errTournament.TOURNAMENT_FULL);
 		if (this.players.has(alias))
 		{
 			console.log(`[TOURNAMENT] Player ${alias} already in tournament, skipping`);
@@ -133,7 +133,7 @@ export class Tournament {
 			const player = this.db.getPlayer(alias);
 
 			if (!player)
-				throw new TournamentError(`Impossible de trouver le joueur ${alias} dans le tournoi ${this.name}`);
+				throw new TournamentError(`${alias} oyuncusu ${this.name} turnuvasında bulunamadı`);
 			this.players.set(player.alias, {
 				 id: player.id,
 				 alias,
@@ -147,7 +147,7 @@ export class Tournament {
 				this.db.setTournamentStatus(TournamentStatus.FULL, this.id);
 			}
 		} catch (error) {
-			console.error(`Erreur lors de l'ajout de ${alias} au tournoi ${this.name}: `, error);
+			console.error(`${alias} oyuncusu ${this.name} turnuvasına eklenirken hata: `, error);
 			throw error;
 		}
 	}
@@ -161,11 +161,11 @@ export class Tournament {
 	public addBotToTournament(botId: string, botName: string): void
 	{
 		if (this.status === TournamentStatus.RUNNING)
-			throw new TournamentError(`Impossible d'ajouter ${botName} au tournoi: le tournoi a déjà débuté`, errTournament.ALREADY_STARTED);
+			throw new TournamentError(`${botName} turnuvaya eklenemiyor: turnuva zaten başladı`, errTournament.ALREADY_STARTED);
 		if (this.status === TournamentStatus.COMPLETED)
-			throw new TournamentError(`Impossible d'ajouter ${botName} au tournoi: le tournoi est terminé`, errTournament.ALREADY_OVER);
+			throw new TournamentError(`${botName} turnuvaya eklenemiyor: turnuva sona erdi`, errTournament.ALREADY_OVER);
 		if (this.players.size === this.maxPlayers)
-			throw new TournamentError(`Impossible d'ajouter ${botName} au tournoi: le tournoi est complet`, errTournament.TOURNAMENT_FULL);
+			throw new TournamentError(`${botName} turnuvaya eklenemiyor: turnuva dolu`, errTournament.TOURNAMENT_FULL);
 		if (this.players.has(botName))
 		{
 			console.log(`[TOURNAMENT] Bot ${botName} already in tournament, skipping`);
@@ -250,7 +250,7 @@ export class Tournament {
 	public removePlayerFromTournament(name: string)
 	{
 		if (this.players.has(name) === false)
-			throw new TournamentError(`Impossible de retirer le joueur ${name} : le joueur n'est pas dans le tournoi`);
+			throw new TournamentError(`${name} oyuncusu çıkarılamıyor: oyuncu turnuvada değil`);
 		
 		this.players.delete(name);
 		this.db.removePlayerFromTournament(name, this.id, this.name);
@@ -339,7 +339,7 @@ export class Tournament {
 	{
 		console.log(`[TOURNAMENT] runTournament called for ${this.name} with ${this.players.size} players, status: ${this.status}`);
 		if (this.status !== TournamentStatus.CREATED && this.status !== TournamentStatus.FULL)
-			throw new TournamentError(`Impossible de lancer le tournoi ${this.name}: le tournoi est a déjà commencé ou est terminé`);
+			throw new TournamentError(`${this.name} turnuvası başlatılamıyor: turnuva zaten başlamış veya sona ermiş`);
 
 		this.db.setTournamentStatus(TournamentStatus.RUNNING, this.id);
 		this.status = TournamentStatus.RUNNING;
@@ -353,7 +353,7 @@ export class Tournament {
 			this.bracket = this.bracketService.generateBracket(playersArray);
 			console.log(`[TOURNAMENT] Bracket generated: ${this.bracket.length} rounds`);
 		} catch (error) {
-			console.error(`Impossible de lancer le tournoi ${this.name}: `, error);
+			console.error(`${this.name} turnuvası başlatılamadı: `, error);
 			throw error;
 		}
 		this.maxRound = this.bracket.length;

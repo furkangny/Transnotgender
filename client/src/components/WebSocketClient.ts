@@ -100,7 +100,7 @@ export class WebSocketClient
                         this.attemptReconnect();
                     } else {
                         console.log('Déconnexion volontaire, pas de reconnexion');
-                        this.intentionalDisconnect = false; // Reset le flag
+                        this.intentionalDisconnect = false; // Reset the flag
                     }
                 };
                 this.ws.onerror = (error) => {

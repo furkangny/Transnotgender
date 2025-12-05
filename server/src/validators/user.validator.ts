@@ -9,40 +9,40 @@ const db = getDatabase()
 export function validateNewPassword(newPassword: string | undefined)
 {
 	if (!newPassword || newPassword === undefined)
-        throw new BadRequest('Le nouveau mot de passe est requis');
+        throw new BadRequest('Yeni şifre gereklidir');
     if (newPassword.length < 6)
-        throw new BadRequest('Le nouveau mot de passe doit contenir au moins 6 caractères');
+        throw new BadRequest('Yeni şifre en az 6 karakter olmalıdır');
     if (newPassword.length > 20)
-        throw new BadRequest('Le nouveau mot de passe ne peut pas dépasser 20 caractères');
+        throw new BadRequest('Yeni şifre 20 karakteri geçemez');
     if (!PASSWORD_PATTERN.test(newPassword))
-        throw new BadRequest('Le nouveau mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial');
+        throw new BadRequest('Yeni şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir');
 }
 
 export function validateCurrentPassword(currentPassword: string | undefined, hashedPassword: string)
 {
     if (!currentPassword || currentPassword === undefined)
-        throw new BadRequest('Le mot de passe actuel est requis');
+        throw new BadRequest('Mevcut şifre gereklidir');
     if (!verifyPassword(currentPassword, hashedPassword))
-        throw new UserError('Mot de passe actuel incorrect', errClient.INVALID_CREDENTIALS);
+        throw new UserError('Mevcut şifre hatalı', errClient.INVALID_CREDENTIALS);
 }
 
 export function validateNewAlias(newAlias: string | undefined, userId: string, userLogin: string): void {
     if (!newAlias || newAlias === undefined)
-        throw new BadRequest('Le nouvel alias est requis');
+        throw new BadRequest('Yeni takma ad gereklidir');
     
     const trimmedAlias = newAlias.trim();
     if (trimmedAlias.length < 3)
-        throw new BadRequest('Le nouvel alias doit contenir au moins 3 caractères');
+        throw new BadRequest('Yeni takma ad en az 3 karakter olmalıdır');
     if (trimmedAlias.length > 16)
-        throw new BadRequest('Le nouvel alias ne peut pas dépasser 16 caractères');
+        throw new BadRequest('Yeni takma ad 16 karakteri geçemez');
 
     if (!ALIAS_PATTERN.test(trimmedAlias))
-        throw new BadRequest('Le nouvel alias ne peut contenir que des lettres, chiffres, tirets et underscores');
+        throw new BadRequest('Yeni takma ad sadece harf, rakam, tire ve alt çizgi içerebilir');
 
     if (trimmedAlias === userLogin)
-        throw new BadRequest('Le nouvel alias ne peut pas être identique au login');
+        throw new BadRequest('Yeni takma ad kullanıcı adıyla aynı olamaz');
     
     const existingUser = db.getUserByAlias(trimmedAlias);
     if (existingUser && existingUser.id !== userId)
-        throw new UserError('Cet alias est déjà utilisé', errClient.ALIAS_ALREADY_TAKEN, 409);
+        throw new UserError('Bu takma ad zaten kullanılıyor', errClient.ALIAS_ALREADY_TAKEN, 409);
 }

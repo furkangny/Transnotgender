@@ -16,7 +16,7 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user)
-			return res.code(401).send({ success: false, message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ success: false, message: 'Lütfen tekrar giriş yapın' });
 
 		console.log('[AVATAR] Starting upload for user:', user.id);
 
@@ -29,7 +29,7 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		{
 			console.error('[AVATAR] Validation error:', error);
 			const statusCode = error.statusCode || 500;
-			const message = error.message || 'Erreur lors de l\'upload';
+			const message = error.message || 'Yükleme sırasında hata oluştu';
 			return res.code(statusCode).send({ success: false, message });
 		}
 		
@@ -53,7 +53,7 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		db.updateUserAvatar(user.id, filename);
 		console.log('[AVATAR] Database updated with new avatar');
 
-		return res.code(200).send({ success: true, message: 'Avatar mis à jour avec succès', avatar: `/avatars/users/${filename}` })
+		return res.code(200).send({ success: true, message: 'Avatar başarıyla güncellendi', avatar: `/avatars/users/${filename}` })
 	})
 
 
@@ -62,12 +62,12 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user)
-			return res.code(401).send({ success: false, message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ success: false, message: 'Lütfen tekrar giriş yapın' });
 
 		const avatar = db.getUserAvatar(user.id);
 
 		if (!avatar)
-			return res.code(404).send({ success: false, message: 'Avatar introuvable'});
+			return res.code(404).send({ success: false, message: 'Avatar bulunamadı'});
 
 		let avatarPath = "";
 		if (avatar === DEFAULT_AVATAR_FILENAME)
@@ -83,12 +83,12 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user)
-			return res.code(401).send({ success: false, message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ success: false, message: 'Lütfen tekrar giriş yapın' });
 
 		const oldAvatar = db.getUserAvatar(user.id);
 		
 		if (!oldAvatar || oldAvatar === DEFAULT_AVATAR_FILENAME)
-			return res.code(400).send({ success: false, message: 'Vous avez déjà l\'avatar par défaut' });
+			return res.code(400).send({ success: false, message: 'Zaten varsayılan avatarı kullanıyorsunuz' });
 
 		const oldPath = path.join(paths.usersAvatars, oldAvatar);
 		try
@@ -104,7 +104,7 @@ export async function registerAvatarRoutes(server: FastifyInstance)
 		
 		db.updateUserAvatar(user.id, DEFAULT_AVATAR_FILENAME);
 
-		return res.code(200).send({ success: true, message: 'Avatar réinitialisé', avatar: `/avatars/defaults/${DEFAULT_AVATAR_FILENAME}`});
+		return res.code(200).send({ success: true, message: 'Avatar sıfırlandı', avatar: `/avatars/defaults/${DEFAULT_AVATAR_FILENAME}`});
 	})
 }
 

@@ -11,17 +11,17 @@ export async function validateAvatar(req: FastifyRequest, userId: string): Promi
 	const data = await req.file();
 
 	if (!data)
-		throw new BadRequest('Aucun fichier fourni', 404);
+		throw new BadRequest('Dosya sağlanmadı', 404);
 
 	const allowedTypes = ['image/jpeg', 'image/png'];
 	if (!allowedTypes.includes(data.mimetype))
-		throw new BadRequest('Format invalide. Les formats autorisés sont JPEG et PNG', 400);
+		throw new BadRequest('Geçersiz format. İzin verilen formatlar JPEG ve PNG', 400);
 
 	const buffer = await data.toBuffer();
 
 	const MAX_SIZE = 5 * 1024 * 1024;
 	if (buffer.length > MAX_SIZE)
-		throw new BadRequest('Fichier trop volumineux. Le maximum autorisé est 5MB', 413);
+		throw new BadRequest('Dosya çok büyük. İzin verilen maksimum boyut 5MB', 413);
 
 	const fileExtension = path.extname(data.filename) || '.png'; //*defaults to png if no extension
 	const filename = `${userId}-${randomUUID()}.png`;

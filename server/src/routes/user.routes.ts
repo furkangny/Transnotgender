@@ -12,7 +12,7 @@ export async function registerUserRoutes(server: FastifyInstance)
 		const authUser = (req as any).user;
 
 		if (!authUser || !authUser.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { currentPassword, newPassword } = req.body as any;
 
@@ -20,7 +20,7 @@ export async function registerUserRoutes(server: FastifyInstance)
 		validateNewPassword(newPassword);
 
 		if (currentPassword === newPassword)
-			return res.code(400).send({ message: 'Le nouveau mot de passe doit être différent de l\'ancien' });
+			return res.code(400).send({ message: 'Yeni şifre eskisinden farklı olmalıdır' });
 
 const hashedPassword = hashPassword(newPassword);
 db.updateUserPassword(authUser.id, hashedPassword);
@@ -35,25 +35,25 @@ sameSite: 'lax',
 maxAge: 60 * 60 * 24
 });
 
-return res.code(200).send({ success: true, message: 'Mot de passe mis à jour avec succès'});
+return res.code(200).send({ success: true, message: 'Şifre başarıyla güncellendi'});
 })
 
 server.put('/api/user/alias', async (req, res) => {
 const user = (req as any).user;
 
 if (!user || !user.id)
-return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 const { newAlias } = req.body as any;
 validateNewAlias(newAlias, user.id, user.login);
 
 if (user.alias === newAlias)
-return res.code(409).send({ message: 'Le nouvel alias doit être différent de l\'ancien' })
+return res.code(409).send({ message: 'Yeni takma ad eskisinden farklı olmalıdır' })
 
 db.updateUserAlias(user.id, newAlias.trim());
 return res.code(200).send({ 
 success: true, 
-message: 'Alias mis à jour avec succès',
+message: 'Takma ad başarıyla güncellendi',
 alias: newAlias.trim()
 });
 });
@@ -62,11 +62,11 @@ server.get('/api/user/profile/:alias', async (req, res) => {
 		const { alias } = req.params as { alias: string };
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias requis' });
+			return res.code(400).send({ message: 'Takma ad gerekli' });
 
 		const user = db.getUserByAlias(alias);
 		if (!user)
-			return res.code(404).send({ message: 'Utilisateur non trouvé' });
+			return res.code(404).send({ message: 'Kullanıcı bulunamadı' });
 
 		const stats = db.getPlayerStats(alias);
 		const matchHistory = db.getPlayerMatchHistory(alias, 20);

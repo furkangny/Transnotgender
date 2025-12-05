@@ -12,7 +12,7 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const friends = db.getFriends(user.id);
 		return res.code(200).send({ friends });
@@ -22,7 +22,7 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const pendingRequests = db.getPendingFriendRequests(user.id);
 		return res.code(200).send({ pendingRequests });
@@ -32,7 +32,7 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const sentRequests = db.getSentFriendRequests(user.id);
 		return res.code(200).send({ sentRequests });
@@ -41,11 +41,11 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 	server.get('/api/friends/status/:alias', async (req, res) => {
 		const user = (req as any).user
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' })
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' })
 
 		const { alias } = req.params as any
 		if (!alias)
-			return res.code(400).send({ message: 'Alias requis' })
+			return res.code(400).send({ message: 'Takma ad gerekli' })
 
 		const status = db.getFriendshipStatus(user.id, alias)
 		return res.code(200).send({ status })
@@ -56,17 +56,17 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { alias } = req.body as any;
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias requis' });
+			return res.code(400).send({ message: 'Takma ad gerekli' });
 
 		const requestId = db.sendFriendRequest(user.id, alias);
 		return res.code(201).send({
 			success: true,
-			message: `Demande envoyée à ${alias}`,
+			message: `${alias} kullanıcısına istek gönderildi`,
 			requestId
 		});
 	})
@@ -76,17 +76,17 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { alias } = req.body as any;
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias de l\'expéditeur requis'});
+			return res.code(400).send({ message: 'Gönderen takma adı gerekli'});
 
 		db.handleFriendRequest(user.id, alias, ACCEPT_REQUEST);
 		return res.code(200).send({
 			succes: true,
-			message: `Vous êtes maintenant ami avec ${alias}`
+			message: `${alias} ile artık arkadaşsınız`
 		});
 	})
 
@@ -95,17 +95,17 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { alias } = req.body as any;
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias de l\'expéditeur requis'});
+			return res.code(400).send({ message: 'Gönderen takma adı gerekli'});
 
 		db.handleFriendRequest(user.id, alias, REJECT_REQUEST);
 		return res.code(200).send({
 			succes: true,
-			message: 'Demande d\'ami refusée'
+			message: 'Arkadaşlık isteği reddedildi'
 		});
 	})
 
@@ -114,17 +114,17 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { alias } = req.params as any;
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias de l\'expéditeur requis'});
+			return res.code(400).send({ message: 'Gönderen takma adı gerekli'});
 
 		db.cancelFriendRequest(user.id, alias);
 		return res.code(200).send({
 			success: true,
-			message: 'Demande d\'ami retirée'
+			message: 'Arkadaşlık isteği geri çekildi'
 		});
 	})
 
@@ -133,17 +133,17 @@ export async function registerFriendsRoutes(server: FastifyInstance)
 		const user = (req as any).user;
 
 		if (!user || !user.id)
-			return res.code(401).send({ message: 'Veuillez vous reconnecter' });
+			return res.code(401).send({ message: 'Lütfen tekrar giriş yapın' });
 
 		const { alias } = req.params as any;
 
 		if (!alias)
-			return res.code(400).send({ message: 'Alias de l\'expéditeur requis'});
+			return res.code(400).send({ message: 'Gönderen takma adı gerekli'});
 
 		db.removeFriend(user.id, alias);
 		return res.code(200).send({
 			success: true,
-			message: `Vous n'êtes plus ami avec ${alias}`
+			message: `${alias} ile artık arkadaş değilsiniz`
 		})
 	})
 

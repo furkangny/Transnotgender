@@ -30,7 +30,7 @@ async function fetchPendingRequests()
 	const response = await fetch('/api/friends/requests/pending');
 
 	if (!response.ok)
-		throw new Error('Erreur lors de la récupération des demandes en attente');
+		throw new Error('Bekleyen istekler alınırken hata oluştu');
 
 	const data = await response.json();
 	return data.pendingRequests || [];
@@ -41,7 +41,7 @@ async function fetchSentRequests()
 	const response = await fetch('/api/friends/requests/sent');
 
 	if (!response.ok)
-		throw new Error('Erreur lors de la récupération des demandes envoyées');
+		throw new Error('Gönderilen istekler alınırken hata oluştu');
 
 	const data = await response.json();
 	return data.sentRequests || [];
@@ -59,7 +59,7 @@ async function sendRequest(toUserAlias: string)
 
 	const data = await response.json();
 	if (!response.ok)
-		throw new Error(data.message || `Erreur lors de l'envoi de la demande d'ami à ${toUserAlias}`);
+		throw new Error(data.message || `${toUserAlias} kullanıcısına arkadaşlık isteği gönderilirken hata oluştu`);
 
 	return data;
 }
@@ -76,7 +76,7 @@ async function acceptRequest(fromUserAlias: string)
 
 	const data = await response.json();
 	if (!response.ok)
-		throw new Error(data.message || `Erreur lors de l\'acceptation de la demande d\'ami de ${fromUserAlias}`);
+		throw new Error(data.message || `${fromUserAlias} kullanıcısının arkadaşlık isteği kabul edilirken hata oluştu`);
 
 	return data;
 }
@@ -93,7 +93,7 @@ async function rejectRequest(fromUserAlias: string)
 
 	const data = await response.json();
 	if (!response.ok)
-		throw new Error(data.message || `Erreur lors du refus de la demande d\'ami de ${fromUserAlias}`);
+		throw new Error(data.message || `${fromUserAlias} kullanıcısının arkadaşlık isteği reddedilirken hata oluştu`);
 
 	return data;
 }
@@ -106,7 +106,7 @@ async function cancelRequest(alias: string)
 	
 	const data = await response.json();
 	if (!response.ok)
-		throw new Error(data.message || `Erreur lors de l\'annulation de la demande d\'ami de ${alias}`);
+		throw new Error(data.message || `${alias} kullanıcısına arkadaşlık isteği iptal edilirken hata oluştu`);
 }
 
 async function deleteFriend(alias: string)
@@ -117,7 +117,7 @@ async function deleteFriend(alias: string)
 
 	const data = await response.json();
 	if (!response.ok)
-		throw new Error(data.message || `Erreur lors de la suppression de ${alias} de vos amis`)
+		throw new Error(data.message || `${alias} arkadaşlıktan çıkarılırken hata oluştu`)
 }
 
 
@@ -211,14 +211,14 @@ function renderFriends(friends: Friend[]): void {
             if (!alias)
 				return;
             
-            if (!confirm(`Voulez-vous vraiment supprimer ${alias} de vos amis ?`))
+            if (!confirm(`${alias} kullanıcısını arkadaşlıktan gerçekten çıkarmak istiyor musunuz?`))
 				return;
             
             try {
                 await deleteFriend(alias);
                 await loadAllData();
             } catch (error: any) {
-                alert(error.message || 'Erreur lors de la suppression');
+                alert(error.message || 'Silme sırasında hata oluştu');
             }
         });
     });
@@ -234,7 +234,7 @@ function renderPendingRequests(requests: FriendRequest[]): void {
 	{
         container.innerHTML = `
             <p class="text-gray-400 text-center py-8 font-quency">
-                Aucune demande en attente
+                Bekleyen istek yok
             </p>
         `;
         return;
@@ -258,13 +258,13 @@ function renderPendingRequests(requests: FriendRequest[]): void {
                     data-alias="${request.from_alias}"
                     class="accept-request-btn flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded 
                            font-quency text-sm transition-all hover:scale-105 active:scale-95">
-                    ✓ Accepter
+                    ✓ Kabul Et
                 </button>
                 <button 
                     data-alias="${request.from_alias}"
                     class="reject-request-btn flex-1 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded 
                            font-quency text-sm transition-all hover:scale-105 active:scale-95">
-                    ✗ Refuser
+                    ✗ Reddet
                 </button>
             </div>
         </div>
@@ -280,7 +280,7 @@ function renderPendingRequests(requests: FriendRequest[]): void {
                 await acceptRequest(alias);
                 await loadAllData();
             } catch (error: any) {
-                alert(error.message || 'Erreur lors de l\'acceptation');
+                alert(error.message || 'Kabul sırasında hata oluştu');
             }
         });
     });
@@ -295,7 +295,7 @@ function renderPendingRequests(requests: FriendRequest[]): void {
                 await rejectRequest(alias);
                 await loadPendingRequests();
             } catch (error: any) {
-                alert(error.message || 'Erreur lors du refus');
+                alert(error.message || 'Ret sırasında hata oluştu');
             }
         });
     });
@@ -311,7 +311,7 @@ function renderSentRequests(requests: FriendRequest[]): void {
 	{
         container.innerHTML = `
             <p class="text-gray-400 text-center py-8 font-quency">
-                Aucune demande envoyée
+                Gönderilmiş istek yok
             </p>
         `;
         return;
@@ -334,7 +334,7 @@ function renderSentRequests(requests: FriendRequest[]): void {
                 data-alias="${request.to_alias}"
                 class="cancel-request-btn w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded 
                        font-quency text-sm transition-all hover:scale-105 active:scale-95">
-                Annuler
+                İptal Et
             </button>
         </div>
     `).join('');
@@ -350,7 +350,7 @@ function renderSentRequests(requests: FriendRequest[]): void {
                 await cancelRequest(alias);
                 await loadSentRequests();
             } catch (error: any) {
-                alert(error.message || 'Erreur lors de l\'annulation');
+                alert(error.message || 'İptal sırasında hata oluştu');
             }
         });
     });
@@ -490,7 +490,7 @@ function setupAddFriend(): void
         }
 
         try {
-            button.textContent = 'Envoi...';
+            button.textContent = 'Gönderiliyor...';
             button.setAttribute('disabled', 'true');
             
             const result = await sendRequest(alias);
@@ -500,9 +500,9 @@ function setupAddFriend(): void
             await loadSentRequests();
             
         } catch (error: any) {
-            showMessage(messageEl, error.message || 'Erreur lors de l\'envoi', 'error');
+            showMessage(messageEl, error.message || 'Gönderme sırasında hata oluştu', 'error');
         } finally {
-            button.textContent = 'Envoyer la demande';
+            button.textContent = 'İstek Gönder';
             button.removeAttribute('disabled');
         }
     };

@@ -21,45 +21,45 @@ export function validateRegistering(requestBody: any) //*purely simple parsing (
 				[alias] : ${alias}`);
 
 	if (typeof login !== 'string')
-		throw new BadRequest('Veuillez entrer votre nom d\'utilisateur');
+		throw new BadRequest('Lütfen kullanıcı adınızı girin');
 	if (login.length < 3)
-		throw new BadRequest('Le nom d\'utilisateur doit être composé d\'au moins 3 caractères.')
+		throw new BadRequest('Kullanıcı adı en az 3 karakterden oluşmalıdır.')
 	else if (login.length > 24)
-		throw new BadRequest('Le nom d\'utilisateur ne doit pas faire plus de 24 caractères')
+		throw new BadRequest('Kullanıcı adı 24 karakterden uzun olmamalıdır')
 	if (!LOGIN_PATTERN.test(login))
-		throw new BadRequest('Au moins un caractère invalide dans le nom d\'utilisateur')
+		throw new BadRequest('Kullanıcı adında geçersiz karakter var')
 	
 	if (typeof alias !== 'string')
-		throw new BadRequest('Veuillez entrer votre alias');
+		throw new BadRequest('Lütfen takma adınızı girin');
 	if (alias.length < 3)
-		throw new BadRequest('L\'alias doit être composé d\'au moins 3 caractères.')
+		throw new BadRequest('Takma ad en az 3 karakterden oluşmalıdır.')
 	else if (alias.length > 24)
-		throw new BadRequest('L\'alias ne doit pas faire plus de 24 caractères')
+		throw new BadRequest('Takma ad 24 karakterden uzun olmamalıdır')
 	if (!ALIAS_PATTERN.test(alias))
-		throw new BadRequest('Au moins un caractère invalide dans l\'alias')
+		throw new BadRequest('Takma adda geçersiz karakter var')
 	if (login === alias)
-		throw new BadRequest('Le nom d\'utilisateur et l\'alias doivent être différents')
+		throw new BadRequest('Kullanıcı adı ve takma ad farklı olmalıdır')
 
 	if (typeof password !== 'string')
-		throw new BadRequest('Veuillez entrer un mot de passe');
+		throw new BadRequest('Lütfen bir şifre girin');
 	if (password.length < 6)
-		throw new BadRequest('Le mot de passe doit être composé d\'au moins 6 caractères.')
+		throw new BadRequest('Şifre en az 6 karakterden oluşmalıdır.')
 	if (password.length > 32)
-		throw new BadRequest('Le mot de passe doit être inférieur à 32 caractères')
+		throw new BadRequest('Şifre 32 karakterden kısa olmalıdır')
 	if (!PASSWORD_PATTERN.test(password))
-		throw new BadRequest('Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial')
+		throw new BadRequest('Şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir')
 
 	if (password !== passwordValidation)
-		throw new BadRequest('Les mots de passe sont différents');
+		throw new BadRequest('Şifreler eşleşmiyor');
 }
 
 export function checkForDuplicatesAtRegistering(login: string, alias: string)
 {
 	if (db.getUserByLogin(login))
-		throw new UserError('Le nom d\'utilisateur choisi existe déjà', errClient.DUPLICATE_LOGIN, 409);
+		throw new UserError('Bu kullanıcı adı zaten mevcut', errClient.DUPLICATE_LOGIN, 409);
 
 	if (db.getUserByAlias(alias))
-		throw new UserError('L\'alias choisi existe déjà', errClient.DUPLICATE_NAME, 409);
+		throw new UserError('Bu takma ad zaten mevcut', errClient.DUPLICATE_NAME, 409);
 
 }
 
@@ -71,27 +71,27 @@ export function validateLoggingIn(requestBody: any)
 	console.log(`[login] : ${login}\n[password] : ${password}`);
 	
 	if (!login)
-		throw new BadRequest('Veuillez entrer votre nom d\'utilisateur');
+		throw new BadRequest('Lütfen kullanıcı adınızı girin');
 	
 	if (!password)
-		throw new BadRequest('Veuillez entrer votre mot de passe');
+		throw new BadRequest('Lütfen şifrenizi girin');
 
 	const user = db.getUserByLogin(login);
 	if (!user)
-		throw new BadRequest('Nom d\'utilisateur et/ou mot de passe incorrect', 404);
+		throw new BadRequest('Kullanıcı adı ve/veya şifre hatalı', 404);
 	
 	console.log(`Found user: login=${user.login}, alias=${user.alias}, id=${user.id}`);
 	
 	const hashedPassword = user.password;
 	if (verifyPassword(password, hashedPassword!) === false)
-		throw new BadRequest('Nom d\'utilisateur et/ou mot de passe incorrect', 404);
+		throw new BadRequest('Kullanıcı adı ve/veya şifre hatalı', 404);
 }
 
 const EXPECTED_CLIENT_ID = "782178545544-31i17kv4fli13eqj7o0l4dclqnbb3hql.apps.googleusercontent.com";
 export async function validateGoogleToken(credential: string | undefined)
 {
 	if (!credential)
-		throw new BadRequest('Token manquant', 400);
+		throw new BadRequest('Token eksik', 400);
 
 
 	const googleResponse = await fetch(
@@ -101,7 +101,7 @@ export async function validateGoogleToken(credential: string | undefined)
     if (!googleResponse.ok)
     {
         console.error('[AUTH] ❌ Token rejeté par Google');
-        throw new BadRequest('Token invalide', 401);
+        throw new BadRequest('Geçersiz token', 401);
     }
 
     const payload = await googleResponse.json();
@@ -111,11 +111,11 @@ export async function validateGoogleToken(credential: string | undefined)
     if (payload.aud !== EXPECTED_CLIENT_ID)
     {
         console.error('[AUTH] ❌ Token pas pour cette application');
-        throw new BadRequest('Token invalide', 401);
+        throw new BadRequest('Geçersiz token', 401);
     }
 
     if (!payload.email)
-        throw new BadRequest('Email manquant', 400);
+        throw new BadRequest('E-posta eksik', 400);
 
     const name = payload.name || payload.email.split('@')[0] || 'User';
 

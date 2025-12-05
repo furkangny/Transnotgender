@@ -1,133 +1,133 @@
-# Transcendence
+﻿# Transcendence
 
-## Démarrage rapide avec Docker
-
-```bash
-make run              # Build et lance l'application
-```
-
-L'application sera accessible sur : **http://localhost**
-
-### Autres commandes Docker
+## Docker ile Hızlı Başlangıç
 
 ```bash
-make build            # Construire les images
-make up               # Démarrer les conteneurs
-make down             # Arrêter les conteneurs
-make restart          # Redémarrer
-make logs             # Voir les logs
-make clean            # Tout supprimer (images, volumes, conteneurs)
-make ps               # Voir les conteneurs actifs
+make run              # Uygulamayı derle ve başlat
 ```
 
-## Développement local (sans Docker)
+Uygulama şu adreste erişilebilir olacak: **http://localhost**
+
+### Diğer Docker Komutları
+
+```bash
+make build            # İmajları oluştur
+make up               # Konteynerleri başlat
+make down             # Konteynerleri durdur
+make restart          # Yeniden başlat
+make logs             # Logları görüntüle
+make clean            # Her şeyi sil (imajlar, volume'lar, konteynerler)
+make ps               # Aktif konteynerleri görüntüle
+```
+
+## Yerel Geliştirme (Docker olmadan)
 
 ```bash
 nvm use 22
-npm install           # Installe les dépendances client + serveur
-npm run dev           # Lance client + serveur en mode watch (se relance a chaque fois qu'un fichier est save)
+npm install           # Client + server bağımlılıklarını yükle
+npm run dev           # Client + server'ı watch modunda başlat (her dosya kaydedildiğinde yeniden başlar)
 ```
 
-Serveur accessible sur : **http://localhost:8080**
+Sunucu şu adreste erişilebilir: **http://localhost:8080**
 
-### Commandes disponibles
+### Kullanılabilir Komutlar
 
 ```bash
-npm run build         # Compile tout le projet
-npm start             # Lance le serveur
-npm run clean         # Nettoie les fichiers générés
+npm run build         # Tüm projeyi derle
+npm start             # Sunucuyu başlat
+npm run clean         # Oluşturulan dosyaları temizle
 
-# Spécifiques
-npm run dev:client    # Client en mode watch
-npm run dev:server    # Serveur en mode watch
-npm run build:client  # Compile uniquement le client
-npm run build:server  # Compile uniquement le serveur
+# Özel komutlar
+npm run dev:client    # Client watch modunda
+npm run dev:server    # Server watch modunda
+npm run build:client  # Sadece client'ı derle
+npm run build:server  # Sadece server'ı derle
 ```
 
-## Architecture Docker
+## Docker Mimarisi
 
 ```
-┌─────────────────────────────────────┐
-│  http://localhost:8080              │
-│  ┌────────────────────────────────┐ │
-│  │         NGINX                  │ │
-│  │  - Sert les fichiers statiques │ │
-│  │  - Reverse proxy               │ │
-│  └──────────┬─────────────────────┘ │
-│             │ Proxy /game           │
-│             ▼                        │
-│  ┌────────────────────────────────┐ │
-│  │   SERVER (Port 8080 interne)   │ │
-│  │  - WebSocket /game             │ │
-│  │  - API endpoints               │ │
-│  └────────────────────────────────┘ │
-└─────────────────────────────────────┘
+
+  http://localhost:8080              
+   
+           NGINX                   
+    - Statik dosyaları sunar       
+    - Reverse proxy                
+   
+              Proxy /game           
+                                     
+   
+     SERVER (Dahili Port 8080)     
+    - WebSocket /game              
+    - API endpoints                
+   
+
        Docker Network: transcendence
 ```
 
-### Services
+### Servisler
 
-- **nginx** : Reverse proxy sur port 8080, sert les fichiers statiques
-- **server** : Backend Node.js/Fastify sur port 8080 (interne uniquement)
-- **client** : Builder, compile TypeScript et génère les fichiers statiques
+- **nginx** : Port 8080'de reverse proxy, statik dosyaları sunar
+- **server** : Port 8080'de Node.js/Fastify backend (sadece dahili)
+- **client** : Builder, TypeScript derler ve statik dosyaları oluşturur
 
-## Debugging
+## Hata Ayıklama
 
 ```bash
-# Logs d'un service spécifique
+# Belirli bir servisin logları
 docker compose logs -f nginx
 docker compose logs -f server
 
-# Accéder à un conteneur
+# Bir konteynere erişim
 docker compose exec nginx sh
 docker compose exec server sh
 
-# Reconstruire un service
+# Bir servisi yeniden oluştur
 docker compose build server
 docker compose up -d server
 ```
 
-## Troubleshooting
+## Sorun Giderme
 
-**Port 8080 déjà utilisé :**
+**Port 8080 zaten kullanımda:**
 ```bash
 sudo lsof -i:8080
-# Changer le port dans docker-compose.yml
+# docker-compose.yml'de portu değiştir
 ```
 
-**Le serveur redémarre en boucle :**
+**Sunucu döngüde yeniden başlıyor:**
 ```bash
-make logs             # Voir les erreurs
-make clean && make run # Rebuild complet
+make logs             # Hataları görüntüle
+make clean && make run # Tam yeniden oluşturma
 ```
 
-## Architecture des fichiers
+## Dosya Mimarisi
 ```bash
-server/      # Backend (API, DB, logique métier)
-│   ├── src/               # Source TypeScript du serveur
-│   │   ├── controllers/   # Handlers API/WS (reçoit les messages du client, appelle la logique du jeu, renvoie la réponse)
-│   │   ├── models/        # Modèles de données (définitions des objets du jeu : Ball, Paddle, Player, etc.)
-│   │   ├── services/      # Logique métier (gestion du jeu, calculs, etc.)
-│   │   ├── db/            # Accès et init DB (connexion, requêtes)
-│   │   ├── routes/        # Définition des routes HTTP/WS
-│   │   ├── utils/         # Fonctions utilitaires
-│   │   ├── index.ts       # Entrée principale serveur
-│   │   └── types.ts       # Types globaux
-│   ├── dist/              # JS compilé du serveur
-│   ├── migrations/        # Fichiers SQL
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── README.md
-client/      # Frontend (SPA, assets, styles…)
-│   ├── src/               # Source TypeScript/JS du client (affichage, gestion des inputs)
-│   ├── public/            # Fichiers statiques (index.html, images…)
-│   ├── dist/              # Build JS/CSS du client
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── README.md
-nginx/       # Configuration Nginx (reverse proxy, TLS, proxy WebSocket)
-│   └── nginx.conf         # Fichier de config Nginx
-migrations/  # Fichiers SQL pour la base de données
-docs/        # Documentation
-README.md    # <- On est ici
+server/      # Backend (API, DB, iş mantığı)
+    src/               # Sunucu TypeScript kaynağı
+       controllers/   # API/WS Handler'ları (client mesajlarını alır, oyun mantığını çağırır, yanıt döner)
+       models/        # Veri modelleri (oyun nesnelerinin tanımları: Ball, Paddle, Player, vb.)
+       services/      # İş mantığı (oyun yönetimi, hesaplamalar, vb.)
+       db/            # DB erişimi ve başlatma (bağlantı, sorgular)
+       routes/        # HTTP/WS route tanımları
+       utils/         # Yardımcı fonksiyonlar
+       index.ts       # Sunucu ana giriş noktası
+       types.ts       # Global tipler
+    dist/              # Derlenmiş JS sunucu
+    migrations/        # SQL dosyaları
+    package.json
+    tsconfig.json
+    README.md
+client/      # Frontend (SPA, assets, stiller)
+    src/               # Client TypeScript/JS kaynağı (görüntüleme, input yönetimi)
+    public/            # Statik dosyalar (index.html, resimler)
+    dist/              # Client JS/CSS build
+    package.json
+    tsconfig.json
+    README.md
+nginx/       # Nginx yapılandırması (reverse proxy, TLS, WebSocket proxy)
+    nginx.conf         # Nginx yapılandırma dosyası
+migrations/  # Veritabanı SQL dosyaları
+docs/        # Dokümantasyon
+README.md    # <- Buradasınız
 ```

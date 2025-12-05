@@ -13,7 +13,7 @@ export async function registerStaticRoutes(server: FastifyInstance)
             return reply.type('text/html').send(content)
         } catch (err) {
             console.error('Error reading index.html:', err)
-            return reply.code(500).send('Erreur interne du serveur')
+            return reply.code(500).send('İç sunucu hatası')
         }
     })
     
@@ -21,22 +21,22 @@ export async function registerStaticRoutes(server: FastifyInstance)
         console.log(`NotFound handler for: ${request.url}`)
         
         if (request.url.startsWith('/api/')) {
-            return reply.code(404).send({ error: 'Adresse introuvable' })
+            return reply.code(404).send({ error: 'Adres bulunamadı' })
         }
         
         if (request.url === '/ws') {
-            return reply.code(404).send({ error: 'WebSocket introuvable' })
+            return reply.code(404).send({ error: 'WebSocket bulunamadı' })
         }
 
         if (request.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf)$/)) {
-            return reply.code(404).send('Fichier introuvable')
+            return reply.code(404).send('Dosya bulunamadı')
         }
         
         return fs.promises.readFile(paths.index, 'utf8')
             .then(content => reply.type('text/html').send(content))
             .catch(err => {
                 console.error('❌ Error reading index.html:', err)
-                return reply.code(500).send('Erreur interne du serveur')
+                return reply.code(500).send('İç sunucu hatası')
             })
     })
 }

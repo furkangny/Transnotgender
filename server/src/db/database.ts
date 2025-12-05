@@ -264,7 +264,7 @@ export class DatabaseService {
 		const aliasAlreadyTaken = this.db.prepare('SELECT id FROM users WHERE alias = ?').get(newAlias.trim());
 
 		if (aliasAlreadyTaken && aliasAlreadyTaken.id != userId)
-			throw new DatabaseError('Le pseudo choisi est déjà pris', errDatabase.ALIAS_ALREADY_TAKEN);
+			throw new DatabaseError('Seçilen takma ad zaten kullanılıyor', errDatabase.ALIAS_ALREADY_TAKEN);
 
 		//*in users table
 		this.db.prepare('UPDATE users SET alias = ? WHERE id = ?').run(newAlias, userId);
@@ -352,24 +352,24 @@ export class DatabaseService {
 		const userToAdd = this.getUserByAlias(toUserAlias);
 
 		if (!userToAdd || !userToAdd.id)
-			throw new DatabaseError('L\'utilisateur n\'existe pas', undefined, 400);
+			throw new DatabaseError('Kullanıcı bulunamadı', undefined, 400);
 		
 		if (userToAdd.id === fromUserId)
-			throw new DatabaseError('Impossible de s\'ajouter soi-même en ami', undefined, 400);
+			throw new DatabaseError('Kendinizi arkadaş olarak ekleyemezsiniz', undefined, 400);
 
 		const alreadyFriends = this.db.prepare(
 			'SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?'
 		).get(fromUserId, userToAdd.id);
 
 		if (alreadyFriends)
-			throw new DatabaseError(`Vous êtes déjà ami avec ${toUserAlias}`, undefined, 400);
+			throw new DatabaseError(`${toUserAlias} ile zaten arkadaşsınız`, undefined, 400);
 
 		const existingRequest = this.db.prepare(
 			'SELECT 1 FROM friend_requests WHERE (from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)'
 		).get(fromUserId, userToAdd.id, userToAdd.id, fromUserId);
 
 		if (existingRequest)
-			throw new DatabaseError('Une demande d\'ami existe déjà entre vous', undefined, 400);
+			throw new DatabaseError('Aranızda zaten bir arkadaşlık isteği var', undefined, 400);
 
 		const requestId = randomUUID();
 		this.db.prepare(
@@ -422,14 +422,14 @@ export class DatabaseService {
 		const sender = this.getUserByAlias(fromAlias);
 
         if (!sender)
-            throw new DatabaseError("L'utilisateur ayant envoyé la demande d\'ami est introuvable", undefined, 404);
+            throw new DatabaseError("Arkadaşlık isteği gönderen kullanıcı bulunamadı", undefined, 404);
         
         const request = this.db.prepare(
             "SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ?"
         ).get(sender.id, userId);
         
         if (!request)
-            throw new DatabaseError("Demande d'ami introuvable", undefined, 404);
+            throw new DatabaseError("Arkadaşlık isteği bulunamadı", undefined, 404);
 
 		if (accept)
 		{
@@ -461,7 +461,7 @@ export class DatabaseService {
 		const recipient = this.getUserByAlias(toAlias);
 
 		if (!recipient)
-			throw new DatabaseError("Utilisateur introuvable", undefined, 404);
+			throw new DatabaseError("Kullanıcı bulunamadı", undefined, 404);
 
 		this.db.prepare(
 			'DELETE FROM friend_requests WHERE from_user_id = ? AND to_user_id = ?'
@@ -513,7 +513,7 @@ export class DatabaseService {
 		const friend = this.getUserByAlias(friendAlias);
 
 		if (!friend)
-			throw new DatabaseError('Utilisateur introuvable', undefined, 404);
+			throw new DatabaseError('Kullanıcı bulunamadı', undefined, 404);
 
 		this.db.prepare(
 			'DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)'
@@ -634,12 +634,12 @@ export class DatabaseService {
 		const result = this.db.prepare("UPDATE players SET alias = ? WHERE id = ?").run(newAlias.trim(), id);
 
 		if (!newAlias || newAlias.trim().length < 3)
-			throw new DatabaseError("Le nom doit faire au moins trois caractères");
+			throw new DatabaseError("Ad en az üç karakter olmalıdır");
 
 		if (!this.db.prepare("SELECT 1 FROM players WHERE id = ?").get(id))
 			throw new DatabaseError("Player not found");
 		if (existingPlayer && existingPlayer.id !== id) 
-			throw new DatabaseError("Le nom de joueur est déjà pris");
+			throw new DatabaseError("Oyuncu adı zaten alınmış");
 		return result.changes > 0;
 	}
 
@@ -685,7 +685,7 @@ export class DatabaseService {
 	public removePlayer(id: string): boolean
 	{
 		if (!id || id.trim().length < 3)
-			throw new DatabaseError("Le nom doit faire au moins trois caractères");
+			throw new DatabaseError("Ad en az üç karakter olmalıdır");
 
 		const result = this.db.prepare("DELETE FROM players WHERE id= ?").run(id);
 		return result.changes > 0;
@@ -893,12 +893,12 @@ export class DatabaseService {
 	public createTournament(name:string, maxPlayers:number): string
 	{
 		if (this.getTournament(undefined, name))
-			throw new DatabaseError(`Le tournoi ${name} existe déjà et ne peut pas être créé`);
+			throw new DatabaseError(`${name} turnuvası zaten mevcut ve oluşturulamaz`);
 
 		if (maxPlayers % 2)
-			throw new DatabaseError("Le nombre de joueurs au sein d'un tournoi doit être pair")
+			throw new DatabaseError("Turnuvadaki oyuncu sayısı çift olmalıdır")
 		if (maxPlayers < 2 || maxPlayers > 64)
-			throw new DatabaseError("Le nombre de joueurs au sein d'un tournoi doit être entre 2 et 64")
+			throw new DatabaseError("Turnuvadaki oyuncu sayısı 2 ile 64 arasında olmalıdır")
 	
 		const id = randomUUID();
 		this.db.prepare("INSERT INTO tournaments (id, name, curr_nb_players, max_players, status, created_at) VALUES (?, ?, ?, ?, ?, ?)"
@@ -920,10 +920,10 @@ export class DatabaseService {
 
 		const tournament = this.getTournament(tournamentId);
 		if (!tournament)
-			throw new DatabaseError(`Le tournoi ${tournamentName} n'existe pas`);
+			throw new DatabaseError(`${tournamentName} turnuvası mevcut değil`);
 		
 		if (tournament.curr_nb_players === tournament.max_players)
-			throw new DatabaseError(`Impossible d'ajouter ${alias}: le tournoi ${tournamentName} est déjà plein`);
+			throw new DatabaseError(`${alias} eklenemiyor: ${tournamentName} turnuvası zaten dolu`);
 
 		let player = this.getPlayer(alias);
 		if (!player) //!
@@ -936,7 +936,7 @@ export class DatabaseService {
 		const playerAlreadyInTournament = this.db.prepare("SELECT 1 FROM tournament_players WHERE tournament_id = ? AND player_id = ?"
 		).get(tournamentId, player!.id);
 		if (playerAlreadyInTournament)
-			throw new DatabaseError(`Le joueur ${alias} existe déjà dans le tournoi ${tournamentName}`)
+			throw new DatabaseError(`${alias} oyuncusu ${tournamentName} turnuvasında zaten mevcut`)
 
 		this.db.prepare("INSERT INTO tournament_players (tournament_id, player_id, alias, joined_at) VALUES (?, ?, ?, ?)"
 		).run(tournamentId, player!.id, alias, Date.now());
@@ -958,14 +958,14 @@ export class DatabaseService {
 	{
 		const player = this.getPlayer(alias);
 		if (!player)
-			throw new DatabaseError(`Le joueur ${alias} n'existe pas`);
+			throw new DatabaseError(`${alias} oyuncusu mevcut değil`);
 
 		const result = this.db.prepare(
 			"DELETE FROM tournament_players WHERE tournament_id = ? AND player_id = ?"
 		).run(tournamentId, player.id);
 
 		if (result.changes === 0)
-			throw new DatabaseError(`Le joueur ${alias} n'est pas dans le tournoi ${tournamentName}`);
+			throw new DatabaseError(`${alias} oyuncusu ${tournamentName} turnuvasında değil`);
 
 		this.db.prepare(
 			"UPDATE tournaments SET curr_nb_players = curr_nb_players - 1 WHERE id = ?"

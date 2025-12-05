@@ -31,25 +31,25 @@ export async function render(route: Route)
     
     console.log('Fetch de:', ROUTES[route]);
     const res = await fetch(ROUTES[route], { cache: 'no-cache' });
-    console.log('Réponse fetch:', res.status, res.ok);
+    console.log('Fetch yanıtı:', res.status, res.ok);
     
     if (!res.ok) {
-        console.error(`Erreur de chargement: ${ROUTES[route]} (${res.status})`);
-        app.innerHTML = '<p class="text-center p-6 text-red-600">Erreur de chargement de la page</p>';
+        console.error(`Yükleme hatası: ${ROUTES[route]} (${res.status})`);
+        app.innerHTML = '<p class="text-center p-6 text-red-600">Sayfa yükleme hatası</p>';
         return;
     }
     
     const html = await res.text();
-    console.log('HTML chargé, longueur:', html.length);
+    console.log('HTML yüklendi, uzunluk:', html.length);
     app.innerHTML = html;
-    console.log('HTML injecté dans #app');
+    console.log('HTML #app içine enjekte edildi');
     
     const initializer = pageInitializers[route];
     if (initializer) {
-        console.log(`[ROUTER] Appel de l'initializer pour "${route}"`);
+        console.log(`[ROUTER] "${route}" için initializer çağrılıyor`);
         initializer();
     } else {
-        console.warn(`[ROUTER] Aucun initializer trouvé pour "${route}"`);
+        console.warn(`[ROUTER] "${route}" için initializer bulunamadı`);
     }
 }
 
@@ -73,7 +73,7 @@ export async function navigate(routeWithParams: Route | string)
 		{
 			window.history.pushState({ route: 'home' }, '', '/home');
 			render('home');
-			alert('Veuillez vous reconnecter');
+			alert('Lütfen tekrar giriş yapın');
 			return;
 		}
 	}

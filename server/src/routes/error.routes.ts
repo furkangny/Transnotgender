@@ -54,7 +54,7 @@ export async function registerErrorRoutes(server: FastifyInstance) //*redundant 
 		}
 
 		return res.code(500).send({
-			error: 'Erreur interne',
+			error: 'İç sunucu hatası',
 			status: 500
 		});
 	})

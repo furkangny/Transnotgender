@@ -716,7 +716,7 @@ function renderWaitingForMatch(): void
 	else if (!siblingMatch)
 	{
 		ctx.font = '24px ' + FONTS.QUENCY_PIXEL;
-		ctx.fillText('Aucun match en cours', canvas.width / 2, canvas.height / 2);
+		ctx.fillText('Devam eden maç yok', canvas.width / 2, canvas.height / 2);
 	}
 	
 	ctx.textAlign = 'left';

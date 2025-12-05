@@ -32,7 +32,7 @@ export async function registerAuthRoutes(server: FastifyInstance) {
 
 		return res.code(201).send({
 			success: true,
-			message: 'Utilisateur créé avec succès'
+			message: 'Kullanıcı başarıyla oluşturuldu'
 		});
 	})
 
@@ -57,7 +57,7 @@ export async function registerAuthRoutes(server: FastifyInstance) {
 
 		return res.code(200).send({
 			success: true,
-			message: 'Connexion réussie',
+			message: 'Giriş başarılı',
 			alias: user!.alias
 		})
 	})
@@ -102,7 +102,7 @@ export async function registerAuthRoutes(server: FastifyInstance) {
 
 		if (!user)
 		{
-			console.log('[AUTH] 🆕 Création utilisateur...');
+			console.log('[AUTH] 🆕 Creating user...');
 
 			const uniqueAlias = db.generateUniqueAlias(data.name);
 
@@ -112,10 +112,10 @@ export async function registerAuthRoutes(server: FastifyInstance) {
 			const userId = db.createUser(data.email, hashedPassword, uniqueAlias);
 			user = db.getUserById(userId);
 
-			console.log('[AUTH] ✅ Utilisateur créé:', user?.alias);
+			console.log('[AUTH] ✅ User created:', user?.alias);
 		}
 		else
-			console.log('[AUTH] 👋 Utilisateur existant:', user.alias);
+			console.log('[AUTH] 👋 Existing user:', user.alias);
 
 		const sessionId = db.createOrUpdateSession(user!.id);
 
@@ -135,7 +135,7 @@ export async function registerAuthRoutes(server: FastifyInstance) {
             email: data.email,
             alias: user!.alias,
             picture: data.picture || null,
-            message: 'Connexion Google réussie'
+            message: 'Google ile giriş başarılı'
         });
 	})
 }

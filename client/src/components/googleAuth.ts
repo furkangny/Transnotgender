@@ -8,7 +8,7 @@ function handleCredentialResponse(response: any) {
 async function handleGoogleLogin(credential: string) 
 {
     try {
-        console.log('[GOOGLE] 🚀 fetch() démarre...');
+        console.log('[GOOGLE] 🚀 fetch() starting...');
         const response = await fetch('/api/auth/google', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -19,7 +19,7 @@ async function handleGoogleLogin(credential: string)
         const data = await response.json();
 
         if (!response.ok) {
-            alert(data.error || 'Erreur connexion Google');
+            alert(data.error || 'Google bağlantı hatası');
             return;
         }
 
@@ -31,21 +31,21 @@ async function handleGoogleLogin(credential: string)
         window.location.reload();
 
     } catch (error) {
-        console.error('[GOOGLE] ❌ Erreur réseau (serveur inaccessible):', error);
-        alert('Impossible de contacter le serveur. Vérifiez que le backend est démarré.');
+        console.error('[GOOGLE] ❌ Network error (server unreachable):', error);
+        alert('Sunucuya bağlanılamıyor. Lütfen backend\'in çalıştığından emin olun.');
     }
 }
 
 export function loadGoogleScript(): Promise<void> {
     return new Promise((resolve, reject) => {
         if (isGoogleScriptLoaded) {
-            console.log('[GOOGLE] Script déjà chargé');
+            console.log('[GOOGLE] Script already loaded');
             resolve();
             return;
         }
 
         if (isGoogleScriptLoading) {
-            console.log('[GOOGLE] Script en cours de chargement...');
+            console.log('[GOOGLE] Script is loading...');
             const checkInterval = setInterval(() => {
                 if (isGoogleScriptLoaded) {
                     clearInterval(checkInterval);
@@ -56,7 +56,7 @@ export function loadGoogleScript(): Promise<void> {
             setTimeout(() => {
                 clearInterval(checkInterval);
                 if (!isGoogleScriptLoaded) {
-                    reject(new Error('Timeout chargement script'));
+                    reject(new Error('Script loading timeout'));
                 }
             }, 10000);
             return;
@@ -70,16 +70,16 @@ export function loadGoogleScript(): Promise<void> {
         script.defer = true;
 
         script.onload = () => {
-            console.log('[GOOGLE] ✅ Script chargé avec succès');
+            console.log('[GOOGLE] ✅ Script loaded successfully');
             isGoogleScriptLoaded = true;
             isGoogleScriptLoading = false;
             resolve();
         };
 
         script.onerror = (error) => {
-            console.error('[GOOGLE] ❌ Erreur chargement script:', error);
+            console.error('[GOOGLE] ❌ Script loading error:', error);
             isGoogleScriptLoading = false;
-            reject(new Error('Échec chargement script Google'));
+            reject(new Error('Failed to load Google script'));
         };
 
         document.head.appendChild(script);
@@ -100,7 +100,7 @@ export async function initGoogle() {
         }
 
         if (typeof google === 'undefined') {
-            throw new Error('Objet google non disponible après 5 secondes');
+            throw new Error('Google object not available after 5 seconds');
         }
         google.accounts.id.initialize({
             client_id: clientId,
@@ -110,8 +110,8 @@ export async function initGoogle() {
         });
 
     } catch (error) {
-        console.error('[GOOGLE] ❌ Erreur initialisation:', error);
-        alert('Impossible de charger Google Sign-In');
+        console.error('[GOOGLE] ❌ Initialization error:', error);
+        alert('Google Sign-In yüklenemedi');
     }
 }
 
@@ -142,12 +142,12 @@ export function triggerGoogleLogin()
 
         const googleBtn = hiddenContainer.querySelector('div[role="button"]') as HTMLElement | null;
         if (googleBtn) {
-            console.log('[GOOGLE] Déclenchement automatique du clic sur le bouton Google...');
+            console.log('[GOOGLE] Triggering automatic click on Google button...');
             googleBtn.click();
         } else {
-            console.error('[GOOGLE] Bouton Google non trouvé dans le conteneur caché');
+            console.error('[GOOGLE] Google button not found in hidden container');
         }
     } catch (error) {
-        console.error('[GOOGLE] Erreur lors du rendu du bouton caché:', error);
+        console.error('[GOOGLE] Error rendering hidden button:', error);
     }
 }

@@ -50,24 +50,24 @@ function setupWebSocketCallbacks(): void {
     };
 
     wsClient.onLobbyList = (lobbies: Lobby[]) => {
-        console.log('[LOBBY] Liste des lobbies reçue:', lobbies);
+        console.log('[LOBBY] Lobby list received:', lobbies);
         currentLobbies = lobbies;
         renderLobbies(lobbies);
     };
 
     wsClient.onLobbyError = (message: string) => {
-        console.error('[LOBBY] Erreur lobby:', message);
-        alert(`Erreur: ${message}`);
+        console.error('[LOBBY] Lobby error:', message);
+        alert(`Hata: ${message}`);
     };
 
     wsClient.onGameStart = (playerRole: 'player1' | 'player2') => {
-        console.log(`[LOBBY] Match de tournoi démarre! Rôle: ${playerRole}`);
+        console.log(`[LOBBY] Tournament match starting! Role: ${playerRole}`);
         sessionStorage.setItem('playerRole', playerRole);
         navigate('game');
     };
     
     wsClient.onTournamentPrepare = (playerRole: 'player1' | 'player2', opponentName: string) => {
-        console.log(`[LOBBY] Préparation tournoi: ${playerRole} vs ${opponentName}`);
+        console.log(`[LOBBY] Tournament preparation: ${playerRole} vs ${opponentName}`);
         sessionStorage.setItem('playerRole', playerRole);
         sessionStorage.setItem('tournamentOpponent', opponentName);
         navigate('game');
@@ -78,8 +78,8 @@ function setupWebSocketCallbacks(): void {
         if (lobbyModal)
             hide(lobbyModal);
         const shouldDisconnect = confirm(
-            `Vous êtes déjà connecté ailleurs avec le nom "${name}".\n\n` +
-            `Voulez-vous déconnecter l'autre session ?`
+            `"${name}" adıyla başka bir yerde zaten bağlısınız.\n\n` +
+            `Diğer oturumun bağlantısını kesmek ister misiniz?`
         );
         if (shouldDisconnect)
             wsClient.forceDisconnectOther(name);
@@ -92,8 +92,8 @@ function setupWebSocketCallbacks(): void {
         if (lobbyModal)
             hide(lobbyModal);
         const shouldDisconnect = confirm(
-            `Vous êtes déjà dans un lobby avec le nom "${name}".\n\n` +
-            `Voulez-vous quitter l'autre lobby et continuer ?`
+            `"${name}" adıyla zaten bir lobidesiniz.\n\n` +
+            `Diğer lobiden çıkıp devam etmek ister misiniz?`
         );
         if (shouldDisconnect)
             wsClient.forceDisconnectOther(name);
@@ -106,8 +106,8 @@ function setupWebSocketCallbacks(): void {
         if (lobbyModal)
             hide(lobbyModal);
         const shouldDisconnect = confirm(
-            `Vous êtes déjà en jeu avec le nom "${name}".\n\n` +
-            `Voulez-vous quitter la partie et continuer ?`
+            `"${name}" adıyla zaten bir oyundasınız.\n\n` +
+            `Oyundan çıkıp devam etmek ister misiniz?`
         );
         if (shouldDisconnect)
             wsClient.forceDisconnectOther(name);
@@ -116,7 +116,7 @@ function setupWebSocketCallbacks(): void {
     };
 
     wsClient.onDisconnectedByOtherSession = () => {
-        alert('Vous avez été déconnecté car une autre session a pris le relais.');
+        alert('Başka bir oturum devraldığı için bağlantınız kesildi.');
         wsClient.disconnect();
         navigate('home');
     };
@@ -139,14 +139,14 @@ function setupWebSocketCallbacks(): void {
 }
 
 function requestLobbyList(): void {
-    console.log('[LOBBY] Demande de la liste des lobbies');
+    console.log('[LOBBY] Requesting lobby list');
     if (!wsClient.isConnected()) {
-        console.log('[LOBBY] WebSocket non connecté, connexion en cours...');
+        console.log('[LOBBY] WebSocket not connected, connecting...');
         wsClient.connect(getWebSocketUrl()).then(() => {
             wsClient.sendMessage({ type: 'requestLobbyList' });
             requestOnlinePlayers();
         }).catch((error) => {
-            console.error('[LOBBY] Erreur de connexion WebSocket:', error);
+            console.error('[LOBBY] WebSocket connection error:', error);
         });
     } else {
         wsClient.sendMessage({ type: 'requestLobbyList' });
@@ -172,9 +172,9 @@ function getStatusColor(status: PlayerOnlineStatus): string
 function getStatusText(status: PlayerOnlineStatus): string
 {
     switch (status) {
-        case 'in-game': return 'En jeu';
-        case 'online': return 'En ligne';
-        default: return 'Hors ligne';
+        case 'in-game': return 'Oyunda';
+        case 'online': return 'Çevrimiçi';
+        default: return 'Çevrimdışı';
     }
 }
 
@@ -201,7 +201,7 @@ function renderOnlinePlayers(players: OnlinePlayer[]): void
     {
         container.innerHTML = `
             <p class="text-gray-400 text-center py-8 font-quency">
-                Aucun joueur en ligne
+                Çevrimiçi oyuncu yok
             </p>
         `;
         return;
@@ -216,7 +216,7 @@ function renderOnlinePlayers(players: OnlinePlayer[]): void
                    </span>
                </div>`
             : '';
-        const friendBadge = player.isFriend ? '<span class="text-xs text-sonpi16-orange">⭐ Ami</span>' : '';
+        const friendBadge = player.isFriend ? '<span class="text-xs text-sonpi16-orange">⭐ Arkadaş</span>' : '';
         const avatarSrc = player.avatar || '/avatars/defaults/Transcendaire.png';
         return `
         <div class="bg-sonpi16-orange bg-opacity-10 rounded-lg p-3 
@@ -248,8 +248,8 @@ function renderLobbies(lobbies: Lobby[]): void {
     if (lobbies.length === 0) {
         lobbyList.innerHTML = `
             <div class="text-center text-sonpi16-orange opacity-60 py-8">
-                <p class="text-lg font-quency">Aucun lobby disponible</p>
-                <p class="text-sm mt-2">Créez-en un pour commencer !</p>
+                <p class="text-lg font-quency">Uygun lobi yok</p>
+                <p class="text-sm mt-2">Başlamak için bir tane oluşturun!</p>
             </div>
         `;
         return;
@@ -274,17 +274,17 @@ function renderLobbies(lobbies: Lobby[]): void {
 }
 
 function joinLobby(lobbyId: string): void {
-    console.log('[LOBBY] Tentative de rejoindre le lobby:', lobbyId);
+    console.log('[LOBBY] Attempting to join lobby:', lobbyId);
 
     if (!currentPlayerName || currentPlayerName.trim() === '') {
-        alert('Veuillez vous connecter avant de rejoindre un lobby');
+        alert('Lütfen bir lobiye katılmadan önce giriş yapın');
         navigate('home');
         return;
     }
 
     if (!wsClient.isConnected()) {
-        console.error('[LOBBY] WebSocket non connecté');
-        alert('Connexion perdue, reconnexion en cours...');
+        console.error('[LOBBY] WebSocket not connected');
+        alert('Bağlantı kesildi, yeniden bağlanılıyor...');
         requestLobbyList();
         return;
     }
@@ -299,11 +299,11 @@ function joinLobby(lobbyId: string): void {
 }
 
 function startLobby(lobbyId: string): void {
-    console.log('[LOBBY] Tentative de lancer le lobby:', lobbyId);
+    console.log('[LOBBY] Attempting to start lobby:', lobbyId);
 
     if (!wsClient.isConnected()) {
-        console.error('[LOBBY] WebSocket non connecté');
-        alert('Connexion perdue, reconnexion en cours...');
+        console.error('[LOBBY] WebSocket not connected');
+        alert('Bağlantı kesildi, yeniden bağlanılıyor...');
         requestLobbyList();
         return;
     }
@@ -315,15 +315,15 @@ function startLobby(lobbyId: string): void {
 }
 
 function deleteLobby(lobbyId: string): void {
-    console.log('[LOBBY] Tentative de supprimer le lobby:', lobbyId);
+    console.log('[LOBBY] Attempting to delete lobby:', lobbyId);
 
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce lobby ?')) {
+    if (!confirm('Bu lobiyi silmek istediğinizden emin misiniz?')) {
         return;
     }
 
     if (!wsClient.isConnected()) {
-        console.error('[LOBBY] WebSocket non connecté');
-        alert('Connexion perdue, reconnexion en cours...');
+        console.error('[LOBBY] WebSocket not connected');
+        alert('Bağlantı kesildi, yeniden bağlanılıyor...');
         requestLobbyList();
         return;
     }
@@ -369,28 +369,28 @@ function initCreationModal(createLobbyModal: HTMLElement) {
         if (!name || name === '') name = `${gameType.value.charAt(0).toUpperCase() + gameType.value.slice(1)} de ${currentPlayerName}`;
 
         if (name.length < 3) {
-            alert('Le nom du lobby doit comporter au moins 3 caractères');
+            alert('Lobi adı en az 3 karakter olmalıdır');
             return;
         }
 
         if (!/^[a-zA-Z0-9_-\s]+$/.test(name)) {
-            alert('Caractères invalides dans le nom du lobby');
+            alert('Lobi adında geçersiz karakterler var');
             return;
         }
 
         if (maxPlayers < 2 || maxPlayers > 16) {
-            alert('Nombre de joueurs invalide (2-16)');
+            alert('Geçersiz oyuncu sayısı (2-16)');
             return;
         }
 
         if (!currentPlayerName || currentPlayerName.trim() === '') {
-            alert('Veuillez vous connecter avant de créer un lobby');
+            alert('Lütfen bir lobi oluşturmadan önce giriş yapın');
             navigate('home');
             return;
         }
 
         if (!wsClient.isConnected()) {
-            alert('Connexion perdue, reconnexion en cours...');
+            alert('Bağlantı kesildi, yeniden bağlanılıyor...');
             requestLobbyList();
             return;
         }
@@ -399,7 +399,7 @@ function initCreationModal(createLobbyModal: HTMLElement) {
         const lobbyType: 'tournament' | 'battleroyale' = 
             type.toLowerCase() === 'tournament' ? 'tournament' : 'battleroyale';
 
-        console.log(`[LOBBY] Création d'un lobby: ${name}, type: ${type}, mode: ${mode}, joueurs: ${maxPlayers}`);
+        console.log(`[LOBBY] Creating lobby: ${name}, type: ${type}, mode: ${mode}, players: ${maxPlayers}`);
 
         const powerUpsEnabled = mode.toLowerCase() === 'custom';
         const settings = {
@@ -442,7 +442,7 @@ function setupLobbyModal(lobby: Lobby) {
 
     if (modalTitle) modalTitle.textContent = `${typeIcon} ${lobby.name}`;
 
-    if (playerCount) playerCount.textContent = `${lobby.players.length}/${lobby.maxPlayers} joueurs`;
+    if (playerCount) playerCount.textContent = `${lobby.players.length}/${lobby.maxPlayers} oyuncu`;
 
     if (playersList) {
         playersList.innerHTML = '';
@@ -555,7 +555,7 @@ function createPlayerElement(player: LobbyPlayer, lobby: Lobby): HTMLDivElement
     if (kickBtn) {
         kickBtn.addEventListener('click', () => {
             if (!wsClient.isConnected()) {
-                alert('Connexion perdue, reconnexion en cours...');
+                alert('Bağlantı kesildi, yeniden bağlanılıyor...');
                 requestLobbyList();
                 return;
             }

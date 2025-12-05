@@ -8,21 +8,21 @@ export function setupDisconnectionHandlers(): void
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if (gameState.gameRunning || wsClient.isConnected()) {
             wsClient.disconnect();
-            console.log('[GAME] Déconnexion lors de la fermeture de la page');
+            console.log('[GAME] Disconnecting on page close');
         }
     };
 
     const handleVisibilityChange = () => {
         if (document.hidden && gameState.gameRunning) {
-            console.log('[GAME] Page cachée pendant une partie, déconnexion...');
+            console.log('[GAME] Page hidden during game, disconnecting...');
             wsClient.disconnect();
             gameState.setGameRunning(false);
         }
     };
 
     const handleSurrender = () => {
-        if (confirm('Voulez-vous vraiment abandonner la partie ?')) {
-            console.log('[GAME] Abandon de la partie');
+        if (confirm('Oyunu gerçekten terk etmek istiyor musunuz?')) {
+            console.log('[GAME] Surrendering');
             if (wsClient.isConnected())
                 wsClient.surrender()
         }
@@ -56,11 +56,11 @@ export function showGameOver(winner: 'player1' | 'player2', lives1: number, live
     else
         isWinner = winner === gameState.currentPlayerRole;
     
-    let message = isWinner ? 'Vous avez gagné !' : 'Vous avez perdu !';
+    let message = isWinner ? 'Kazandınız!' : 'Kaybettiniz!';
     if (forfeit) {
-        message = isWinner ? 'Victoire par abandon !' : 'Vous avez abandonné';
+        message = isWinner ? 'Terk ile kazanılan zafer!' : 'Terk ettiniz';
     }
-    const livesText = isBattleRoyale ? '' : `Vies finales : ${lives1} - ${lives2}`;
+    const livesText = isBattleRoyale ? '' : `Son canlar: ${lives1} - ${lives2}`;
     
     if (!gameState.ctx || !gameState.canvas)
     {
@@ -91,7 +91,7 @@ export function showGameOver(winner: 'player1' | 'player2', lives1: number, live
     gameState.ctx.fillStyle = COLORS.SONPI16_ORANGE;
     if (isTournament && !shouldDisconnect)
     {
-        gameState.ctx.fillText('En attente du prochain match...', gameState.canvas.width / 2, gameState.canvas.height / 2 + 80);
+        gameState.ctx.fillText('Sonraki maç bekleniyor...', gameState.canvas.width / 2, gameState.canvas.height / 2 + 80);
         gameState.setPlayer1(null);
         gameState.setPlayer2(null);
         gameState.setBall(null);
@@ -104,7 +104,7 @@ export function showGameOver(winner: 'player1' | 'player2', lives1: number, live
     else
     {
         const destination = (isTournament || isBattleRoyale) ? 'lobby' : 'home';
-        gameState.ctx.fillText('Retour au lobby dans 3 secondes...', gameState.canvas.width / 2, gameState.canvas.height / 2 + 80);
+        gameState.ctx.fillText('3 saniye içinde lobiye dönülüyor...', gameState.canvas.width / 2, gameState.canvas.height / 2 + 80);
         setTimeout(() => {
             returnToLobby(destination);
         }, 3000);
@@ -115,11 +115,11 @@ export function showGameOver(winner: 'player1' | 'player2', lives1: number, live
 export function returnToLobby(destination: 'home' | 'lobby' = 'home'): void
 {
     if (gameState.isReturningToLobby) {
-        console.log('[GAME] Retour au lobby déjà en cours, ignoré');
+        console.log('[GAME] Return to lobby already in progress, ignoring');
         return;
     }
     
-    console.log(`[GAME] Retour vers ${destination}, déconnexion WebSocket...`);
+    console.log(`[GAME] Returning to ${destination}, disconnecting WebSocket...`);
     gameState.setIsReturningToLobby(true);
     gameState.setGameRunning(false);
     gameState.setCurrentPlayerRole(null);

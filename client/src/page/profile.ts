@@ -125,13 +125,13 @@ async function uploadAvatar(file: File): Promise<void>
 
         const data = await response.json();
         if (!response.ok)
-            throw new Error(data.message || 'Erreur lors de l\'upload');
+            throw new Error(data.message || 'Yükleme sırasında hata oluştu');
 
-        showToast('Avatar mis à jour avec succès', 'success');
+        showToast('Avatar başarıyla güncellendi', 'success');
         await loadAvatar();
     } catch (error) {
         console.error('[PROFILE] Error uploading avatar:', error);
-        showToast(error instanceof Error ? error.message : 'Erreur lors de l\'upload', 'error');
+        showToast(error instanceof Error ? error.message : 'Yükleme sırasında hata oluştu', 'error');
     }
 }
 
@@ -145,13 +145,13 @@ async function deleteAvatar(): Promise<void>
 
         const data = await response.json();
         if (!response.ok)
-            throw new Error(data.message || 'Erreur lors de la suppression');
+            throw new Error(data.message || 'Silme sırasında hata oluştu');
 
-        showToast('Avatar supprimé, avatar par défaut restauré', 'success');
+        showToast('Avatar silindi, varsayılan avatar geri yüklendi', 'success');
         await loadAvatar();
     } catch (error) {
         console.error('[PROFILE] Error deleting avatar:', error);
-        showToast(error instanceof Error ? error.message : 'Erreur lors de la suppression', 'error');
+        showToast(error instanceof Error ? error.message : 'Silme sırasında hata oluştu', 'error');
     }
 }
 
@@ -172,11 +172,11 @@ function initAvatarEdit(): void
         if (!file) return;
 
         if (!['image/jpeg', 'image/png'].includes(file.type)) {
-            showToast('Format invalide. Utilisez JPEG ou PNG', 'error');
+            showToast('Geçersiz format. JPEG veya PNG kullanın', 'error');
             return;
         }
         if (file.size > 5 * 1024 * 1024) {
-            showToast('Fichier trop volumineux (max 5MB)', 'error');
+            showToast('Dosya çok büyük (maks 5MB)', 'error');
             return;
         }
 
@@ -277,19 +277,19 @@ function updateFriendButton(btn: HTMLElement, status: FriendStatus): void
     btn.className = 'px-4 py-2 rounded-xl hover:scale-105 transition font-quency font-bold';
     switch (status) {
         case 'none':
-            btn.innerText = 'Ajouter en ami';
+            btn.innerText = 'Arkadaş Ekle';
             btn.classList.add('bg-green-600', 'text-white');
             break;
         case 'pending-sent':
-            btn.innerText = 'Demande envoyée ✗';
+            btn.innerText = 'İstek Gönderildi ✗';
             btn.classList.add('bg-yellow-500', 'text-white');
             break;
         case 'pending-received':
-            btn.innerText = 'Accepter la demande';
+            btn.innerText = 'İsteği Kabul Et';
             btn.classList.add('bg-blue-600', 'text-white');
             break;
         case 'friends':
-            btn.innerText = 'Supprimer l\'ami';
+            btn.innerText = 'Arkadaşı Sil';
             btn.classList.add('bg-red-600', 'text-white');
             break;
     }
@@ -401,7 +401,7 @@ function renderMatchHistory(matches: MatchHistoryEntry[]): void
     const container = getEl('match-history-list');
     
     if (matches.length === 0) {
-        container.innerHTML = `<p class="text-gray-400 text-center py-8 font-quency">Aucun match joué</p>`;
+        container.innerHTML = `<p class="text-gray-400 text-center py-8 font-quency">Henüz oynanmış maç yok</p>`;
         return;
     }
 
@@ -462,7 +462,7 @@ function renderTournamentResults(results: TournamentResultEntry[]): void
     const container = getEl('tournament-results-list');
     
     if (results.length === 0) {
-        container.innerHTML = `<p class="text-gray-400 text-center py-8 font-quency">Aucun tournoi joué</p>`;
+        container.innerHTML = `<p class="text-gray-400 text-center py-8 font-quency">Henüz oynanmış turnuva yok</p>`;
         return;
     }
 
@@ -480,7 +480,7 @@ function renderTournamentResults(results: TournamentResultEntry[]): void
                     </div>
                 `;
             }).join('')
-            : '<p class="text-gray-400 text-sm py-2">Aucun match enregistré</p>';
+            : '<p class="text-gray-400 text-sm py-2">Kayıtlı maç yok</p>';
 
         return `
             <div class="rounded-lg border ${bgColor} overflow-hidden">
@@ -576,13 +576,13 @@ async function searchPlayer(): Promise<void>
 
     hide(errorEl);
     if (!searchAlias) {
-        errorEl.innerText = 'Veuillez entrer un nom de joueur';
+        errorEl.innerText = 'Lütfen bir oyuncu adı girin';
         show(errorEl);
         return;
     }
     const profile = await fetchProfileData(searchAlias);
     if (!profile) {
-        errorEl.innerText = `Joueur "${searchAlias}" introuvable`;
+        errorEl.innerText = `"${searchAlias}" oyuncusu bulunamadı`;
         show(errorEl);
         return;
     }
@@ -626,7 +626,7 @@ async function initProfilePage(): Promise<void>
     if (!profileData) {
         console.error('[PROFILE] Failed to load profile for:', targetAlias);
         const usernameEl = getEl('username');
-        usernameEl.innerText = 'Utilisateur non trouvé';
+        usernameEl.innerText = 'Kullanıcı bulunamadı';
         return;
     }
 
@@ -656,7 +656,7 @@ async function updateAlias(newAlias: string)
     const data = await response.json();
 
     if (!response.ok)
-        throw new Error(data.message || 'Erreur lors du changement de l\'alias');
+        throw new Error(data.message || 'Takma ad değiştirme sırasında hata oluştu');
 
     return { success: true, message: data.message, alias: newAlias };
 }
@@ -673,7 +673,7 @@ async function updatePassword(currentPassword: string, newPassword: string)
     const data = await response.json();
 
     if (!response.ok)
-        throw new Error(data.message || 'Erreur lors du changement de mot de passe');
+        throw new Error(data.message || 'Şifre değiştirme sırasında hata oluştu');
 
     return { success: true };
 }

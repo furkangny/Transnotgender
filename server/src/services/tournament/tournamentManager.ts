@@ -40,7 +40,7 @@ export class TournamentManagerService
 			this.db.createTournament(name, maxPlayers);
 			const tournamentData = this.db.getTournament(undefined, name);
 			if (!tournamentData)
-				throw new DatabaseError(`Impossible de trouver le tournoi ${name} dans la base de données`);
+				throw new DatabaseError(`${name} turnuvası veritabanında bulunamadı`);
 			const tournament = new Tournament(tournamentData.id, name, maxPlayers, this.matchmaking, settings);
 			this.tournamentsMap.set(tournamentData.id, tournament);
 			return tournamentData.id;
@@ -110,7 +110,7 @@ export class TournamentManagerService
 					if (player)
 						tournament.restorePlayer(player);
 					else
-						throw new TournamentError(`Impossible de rajouter un des joueurs au tournoi ${t.name}`); 
+						throw new TournamentError(`${t.name} turnuvasına oyunculardan biri eklenemedi`); 
 				}
 			}
 
