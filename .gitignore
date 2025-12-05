@@ -7,4 +7,6 @@ note.txt
 t.sh
 pr.md
 pr.md
-server/uploads/*
+server/uploads/avatars/users/*
+!server/uploads/avatars/users/.gitkeep
+!server/uploads/avatars/defaults/
