@@ -2,33 +2,10 @@ import { FastifyInstance } from "fastify"
 import { BadRequest, ServerError, DatabaseError, UserError, TournamentError, BracketError } from "@app/shared/errors.js"
 
 //!removes useless errors (bracket Error)
-export async function registerErrorRoutes(server: FastifyInstance) //*redundant but readable 
+export async function registerErrorRoutes(server: FastifyInstance)
 {
 	server.setErrorHandler((error, req, res) => {
-		if (error instanceof BadRequest)
-		{
-			return res.code(error.status).send({
-				error: error.message,
-				status: error.status
-			})
-
-		}
-
-		if (error instanceof ServerError)
-		{
-			return res.code(error.statusCode).send({
-				error: error.message, 
-				status: error.statusCode
-			})
-		}
-
-		if (error instanceof DatabaseError)
-		{
-			return res.code(error.statusCode).send({
-				error: error.message, 
-				status: error.statusCode
-			})
-		}
+		// Handle user-related errors
 		if (error instanceof UserError)
 		{
 			return res.code(error.statusCode).send({
@@ -37,6 +14,25 @@ export async function registerErrorRoutes(server: FastifyInstance) //*redundant 
 			})
 		}
 
+		// Handle bad request errors
+		if (error instanceof BadRequest)
+		{
+			return res.code(error.status).send({
+				error: error.message,
+				status: error.status
+			})
+		}
+
+		// Handle database errors
+		if (error instanceof DatabaseError)
+		{
+			return res.code(error.statusCode).send({
+				error: error.message, 
+				status: error.statusCode
+			})
+		}
+
+		// Handle tournament-related errors
 		if (error instanceof TournamentError)
 		{
 			return res.code(error.statusCode).send({
@@ -45,7 +41,17 @@ export async function registerErrorRoutes(server: FastifyInstance) //*redundant 
 			})
 		}
 
+		// Handle bracket errors
 		if (error instanceof BracketError)
+		{
+			return res.code(error.statusCode).send({
+				error: error.message, 
+				status: error.statusCode
+			})
+		}
+
+		// Handle server errors
+		if (error instanceof ServerError)
 		{
 			return res.code(error.statusCode).send({
 				error: error.message, 

@@ -5,53 +5,124 @@ import { checkForDuplicatesAtRegistering, validateRegistering } from "../validat
 import { validateLoggingIn } from "../validators/auth.validator.js";
 import { validateGoogleToken } from "../validators/auth.validator.js";
 
+// Session cookie configuration constants
+const SESSION_COOKIE_OPTIONS = {
+	path: '/',
+	httpOnly: true,
+	secure: true,
+	sameSite: 'lax' as const,
+	maxAge: 60 * 60 * 24 // 24 hours
+};
+
+/**
+ * Registers all authentication-related routes.
+ * Handles user registration, login, logout, session management, and OAuth.
+ * @param server - Fastify instance to register routes on
+ */
 export async function registerAuthRoutes(server: FastifyInstance) {
 	const db = getDatabase();
 
-	server.post('/api/auth/register', async (req, res) => {
+	/**
+	 * GET /api/auth/me
+	 * Returns current authenticated user information
+	 */
+	server.get('/api/auth/me', async (req, res) => {
 
-		validateRegistering(req.body);
-		const { login, password, passwordValidation, alias } = req.body as any;
+		const user = (req as any).user;
 
-		checkForDuplicatesAtRegistering(login, alias);
+		console.log('[AUTH] Session check for user:', user?.alias || 'anonymous');
+		if (!user)
+			return res.code(401).send({ alias: undefined });
+		else
+			return res.code(200).send({ alias: user.alias });
+	})
 
-		const hashedPassword = hashPassword(password);
-		const userId = db.createUser(login, hashedPassword, alias);
+	/**
+	 * POST /api/auth/logout
+	 * Terminates user session and clears authentication cookie
+	 */
+	server.post('/api/auth/logout', async (req, res) => {
+		const user = (req as any).user;
 
-		const sessionId = db.createOrUpdateSession(userId);
+		if (user && user.id)
+		{
+			db.setUserOnlineStatus(user.id, false);
+			db.deleteSession(user.id);
+		}
 
-		res.setCookie('session_id', sessionId, {
+		// Clear session cookie
+		res.clearCookie('session_id', {
 			path: '/',
 			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 //*24 hours
+			sameSite: 'lax'
 		});
 
-		db.setUserOnlineStatus(userId, true);
+		return res.code(204).send();
 
-		return res.code(201).send({
+	})
+
+	/**
+	 * POST /api/auth/google
+	 * Handles Google OAuth authentication
+	 * Creates new user if first time login, otherwise authenticates existing user
+	 */
+	server.post('/api/auth/google', async (req, res) => {
+		const { credential } = req.body as { credential?: string };
+
+		// Validate Google OAuth token
+		const data = await validateGoogleToken(credential);
+
+		let user = db.getUserByLogin(data.email)
+
+		if (!user)
+		{
+			// First time Google login - create new user
+			console.log('[AUTH] Creating new user from Google OAuth...');
+
+			const uniqueAlias = db.generateUniqueAlias(data.name);
+
+			// Generate random password for OAuth users (not used for login)
+			const randomPassword = Math.random().toString(36).slice(-16);
+			const hashedPassword = hashPassword(randomPassword);
+
+			const userId = db.createUser(data.email, hashedPassword, uniqueAlias);
+			user = db.getUserById(userId);
+
+			console.log('[AUTH] New user created:', user?.alias);
+		}
+		else
+			console.log('[AUTH] Existing user authenticated:', user.alias);
+
+		const sessionId = db.createOrUpdateSession(user!.id);
+
+		res.setCookie('session_id', sessionId, SESSION_COOKIE_OPTIONS);
+
+		db.setUserOnlineStatus(user!.id, true);
+
+		return res.code(200).send({
 			success: true,
-			message: 'Kullanıcı başarıyla oluşturuldu'
+			id: user!.id,
+			email: data.email,
+			alias: user!.alias,
+			picture: data.picture || null,
+			message: 'Google ile giriş başarılı'
 		});
 	})
 
-
+	/**
+	 * POST /api/auth/login
+	 * Authenticates user with login credentials and creates session
+	 */
 	server.post('/api/auth/login', async (req, res) => {
 
 		validateLoggingIn(req.body);
 		const { login, password } = req.body as any;
 		const user = db.getUserByLogin(login);
 
+		// Create or update session for the authenticated user
 		const sessionId = db.createOrUpdateSession(user!.id);
 
-		res.setCookie('session_id', sessionId, {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24//* 24 hours
-		})
+		res.setCookie('session_id', sessionId, SESSION_COOKIE_OPTIONS)
 
 		db.setUserOnlineStatus(user!.id, true);
 
@@ -62,80 +133,31 @@ export async function registerAuthRoutes(server: FastifyInstance) {
 		})
 	})
 
+	/**
+	 * POST /api/auth/register
+	 * Creates a new user account with login credentials
+	 */
+	server.post('/api/auth/register', async (req, res) => {
 
-	server.post('/api/auth/logout', async (req, res) => {
-		const user = (req as any).user;
+		validateRegistering(req.body);
+		const { login, password, passwordValidation, alias } = req.body as any;
 
-		if (user && user.id)
-		{
-			db.setUserOnlineStatus(user.id, false);
-			db.deleteSession(user.id);
-		}
+		checkForDuplicatesAtRegistering(login, alias);
 
-		res.clearCookie('session_id', {
-			path: '/',
-			httpOnly: true,
-			sameSite: 'lax'
+		// Hash password before storing
+		const hashedPassword = hashPassword(password);
+		const userId = db.createUser(login, hashedPassword, alias);
+
+		// Create session for automatic login after registration
+		const sessionId = db.createOrUpdateSession(userId);
+
+		res.setCookie('session_id', sessionId, SESSION_COOKIE_OPTIONS);
+
+		db.setUserOnlineStatus(userId, true);
+
+		return res.code(201).send({
+			success: true,
+			message: 'Kullanıcı başarıyla oluşturuldu'
 		});
-		// req.cookies.id = "";//!changed
-		return res.code(204).send();
-
-	})
-
-	server.get('/api/auth/me', async (req, res) => {
-
-		const user = (req as any).user;
-
-		console.log(`user: ${user.alias}`);
-		if (!user)
-			return res.code(401).send({ alias: undefined });
-		else
-			return res.code(200).send({ alias: user.alias });
-	})
-
-	server.post('/api/auth/google', async (req, res) => {
-		const { credential } = req.body as { credential?: string };
-
-		const data = await validateGoogleToken(credential);
-
-		let user = db.getUserByLogin(data.email)
-
-		if (!user)
-		{
-			console.log('[AUTH] 🆕 Creating user...');
-
-			const uniqueAlias = db.generateUniqueAlias(data.name);
-
-			const randomPassword = Math.random().toString(36).slice(-16);
-			const hashedPassword = hashPassword(randomPassword);
-
-			const userId = db.createUser(data.email, hashedPassword, uniqueAlias);
-			user = db.getUserById(userId);
-
-			console.log('[AUTH] ✅ User created:', user?.alias);
-		}
-		else
-			console.log('[AUTH] 👋 Existing user:', user.alias);
-
-		const sessionId = db.createOrUpdateSession(user!.id);
-
-		res.setCookie('session_id', sessionId, {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 //*24 hours
-		});
-
-		db.setUserOnlineStatus(user!.id, true);
-
-		return res.code(200).send({
-            success: true,
-            id: user!.id,
-            email: data.email,
-            alias: user!.alias,
-            picture: data.picture || null,
-            message: 'Google ile giriş başarılı'
-        });
 	})
 }

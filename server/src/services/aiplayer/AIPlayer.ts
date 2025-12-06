@@ -2,6 +2,8 @@ import { GameService } from '../game/game.js'
 import { Player } from '@app/shared/models/Player.js'
 import { Ball } from '@app/shared/models/Ball.js'
 import { Paddle } from '@app/shared/models/Paddle.js'
+import { BotIntelligence } from './core/BotIntelligence.js'
+import { DecisionLogger } from './core/DecisionLogger.js'
 import {
 	canvasWidth,
 	canvasHeight,
@@ -31,6 +33,8 @@ export abstract class AIPlayer
 	protected oldBallY: number
 	protected targetY: number | null
 	protected slotHoldCounters: number[] = [0, 0, 0]
+	protected intelligence: BotIntelligence
+	protected logger: DecisionLogger
 
 	constructor(
 		playerId: 'player1' | 'player2',
@@ -52,6 +56,8 @@ export abstract class AIPlayer
 		this.oldBallX = canvasWidth / 2
 		this.oldBallY = canvasHeight / 2
 		this.targetY = null
+		this.intelligence = new BotIntelligence()
+		this.logger = new DecisionLogger(playerId)
 
 	}
 
@@ -103,6 +109,9 @@ export abstract class AIPlayer
 		const tolerance = 5
 		if (this.targetY === null)
 			return this.stopMovement()
+		
+		this.logger.logMovement(paddleCenter, this.targetY)
+
 		const distance = paddleCenter - this.targetY
 		if (Math.abs(distance) < tolerance)
 			return this.stopMovement()

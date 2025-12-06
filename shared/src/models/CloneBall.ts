@@ -1,13 +1,12 @@
 import { curveAcceleration } from "../consts.js";
+import { GameObject } from "../core/GameObject.js";
 
 /**
  * @brief Clone ball for 16 power-up effect
  * @details Fake ball that bounces on walls only, not on paddles
  */
-export class CloneBall
+export class CloneBall extends GameObject
 {
-    public positionX: number;
-    public positionY: number;
     public velocityX: number;
     public velocityY: number;
     public readonly size: number;
@@ -25,14 +24,14 @@ export class CloneBall
      */
     constructor(positionX: number, positionY: number, velocityX: number, velocityY: number, speedBoostMultiplier: number = 1.0)
     {
-        this.positionX = positionX;
-        this.positionY = positionY;
+        super(positionX, positionY);
         this.velocityX = velocityX;
         this.velocityY = velocityY;
         this.size = 12;
         this.isCurving = false;
         this.curveDirection = 0;
         this.speedBoostMultiplier = speedBoostMultiplier;
+        this.logEvent('created', `CloneBall at ${positionX},${positionY}`);
     }
 
     /**

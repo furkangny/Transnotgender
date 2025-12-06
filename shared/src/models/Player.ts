@@ -35,6 +35,11 @@ export class Player
         this.chargingPowerUp = null;
         this.lastChargeTime = 0;
         this.paddle = new Paddle(paddleX, canvasHeight / 2 - paddleSize / 2);
+        this.logCreation();
+    }
+
+    private logCreation(): void {
+        // console.log(`Player ${this.name} created with ${this.lives} lives`);
     }
 
     /**

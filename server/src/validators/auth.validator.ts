@@ -1,56 +1,36 @@
 import { BadRequest, UserError, errClient } from "@app/shared/errors.js"
+import { BaseValidator } from "./core/BaseValidator.js";
 import { getDatabase } from "../db/databaseSingleton.js"
 import { verifyPassword } from "../utils/passwords.js";
 
-const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/;
-const LOGIN_PATTERN = /^[a-zA-Z0-9_!@#$%&*=-]+$/;
-const ALIAS_PATTERN = /^[a-zA-Z0-9_ -]+$/;
+const db = getDatabase();
 
+class AuthValidator extends BaseValidator {
+    public validateRegistration(requestBody: any): void {
+        const { login, password, passwordValidation, alias } = requestBody;
 
+        this.log(`Validating registration for user: ${login}, alias: ${alias}`);
 
+        this.validateString(login, 'Kullanıcı adı', 3, 24);
+        this.validatePattern(login, this.PATTERNS.LOGIN, 'Kullanıcı adında geçersiz karakter var');
 
-const db = getDatabase()
+        this.validateString(alias, 'Takma ad', 3, 24);
+        this.validatePattern(alias, this.PATTERNS.ALIAS, 'Takma adda geçersiz karakter var');
 
-export function validateRegistering(requestBody: any) //*purely simple parsing (no duplicates check and so on)
-{
-	const {login, password, passwordValidation, alias } = requestBody;
+        if (login === alias) {
+            throw new BadRequest('Kullanıcı adı ve takma ad farklı olmalıdır');
+        }
 
-	console.log(`[login] : ${login}\n
-				[password] : ${password}\n
-				[passwordValidation] : ${[passwordValidation]}\n
-				[alias] : ${alias}`);
+        this.validateString(password, 'Şifre', 6, 32);
+        this.validatePattern(password, this.PATTERNS.PASSWORD, 'Şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir');
 
-	if (typeof login !== 'string')
-		throw new BadRequest('Lütfen kullanıcı adınızı girin');
-	if (login.length < 3)
-		throw new BadRequest('Kullanıcı adı en az 3 karakterden oluşmalıdır.')
-	else if (login.length > 24)
-		throw new BadRequest('Kullanıcı adı 24 karakterden uzun olmamalıdır')
-	if (!LOGIN_PATTERN.test(login))
-		throw new BadRequest('Kullanıcı adında geçersiz karakter var')
-	
-	if (typeof alias !== 'string')
-		throw new BadRequest('Lütfen takma adınızı girin');
-	if (alias.length < 3)
-		throw new BadRequest('Takma ad en az 3 karakterden oluşmalıdır.')
-	else if (alias.length > 24)
-		throw new BadRequest('Takma ad 24 karakterden uzun olmamalıdır')
-	if (!ALIAS_PATTERN.test(alias))
-		throw new BadRequest('Takma adda geçersiz karakter var')
-	if (login === alias)
-		throw new BadRequest('Kullanıcı adı ve takma ad farklı olmalıdır')
+        if (password !== passwordValidation)
+            throw new BadRequest('Şifreler eşleşmiyor');
+    }
+}
 
-	if (typeof password !== 'string')
-		throw new BadRequest('Lütfen bir şifre girin');
-	if (password.length < 6)
-		throw new BadRequest('Şifre en az 6 karakterden oluşmalıdır.')
-	if (password.length > 32)
-		throw new BadRequest('Şifre 32 karakterden kısa olmalıdır')
-	if (!PASSWORD_PATTERN.test(password))
-		throw new BadRequest('Şifre en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir')
-
-	if (password !== passwordValidation)
-		throw new BadRequest('Şifreler eşleşmiyor');
+export function validateRegistering(requestBody: any) {
+    return new AuthValidator().validateRegistration(requestBody);
 }
 
 export function checkForDuplicatesAtRegistering(login: string, alias: string)

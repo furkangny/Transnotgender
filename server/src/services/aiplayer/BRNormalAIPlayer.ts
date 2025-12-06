@@ -1,7 +1,7 @@
 import { NormalAIPlayer } from './NormalAIPlayer.js'
 import { Ball } from '@app/shared/models/Ball.js'
 import { Player } from '@app/shared/models/Player.js'
-import { Point2D } from '@app/shared/types.js'
+import { PolygonIntelligence } from './core/PolygonIntelligence.js'
 
 /**
  * @brief Battle Royale AI player extending NormalAIPlayer
@@ -14,6 +14,7 @@ export class BRNormalAIPlayer extends NormalAIPlayer
 	private brPlayerIndex: number
 	private targetSidePosition: number | null
 	private isInClassicMode: boolean
+	private polygonIntelligence: PolygonIntelligence
 
 	constructor(
 		playerIndex: number,
@@ -31,6 +32,7 @@ export class BRNormalAIPlayer extends NormalAIPlayer
 		this.brPlayerIndex = playerIndex
 		this.targetSidePosition = null
 		this.isInClassicMode = false
+		this.polygonIntelligence = new PolygonIntelligence()
 	}
 
 	/**
@@ -114,11 +116,21 @@ export class BRNormalAIPlayer extends NormalAIPlayer
 			return
 		}
 
-		const threatBall = this.findMostThreateningBall(gameState, player, sideStart, sideEnd)
-		if (threatBall)
-			this.targetSidePosition = this.predictInterceptOnSegment(threatBall, sideStart, sideEnd)
-		else
-			this.targetSidePosition = this.findNearestBallPosition(gameState, player, sideStart, sideEnd)
+		const allBalls: Ball[] = []
+		if (gameState.balls && gameState.balls.length > 0)
+			allBalls.push(...gameState.balls)
+		else if (gameState.ball)
+			allBalls.push(gameState.ball)
+
+		const threatBall = this.polygonIntelligence.identifyPrimaryThreat(allBalls, player, sideStart, sideEnd)
+		
+		if (threatBall) {
+			this.targetSidePosition = this.polygonIntelligence.calculateSegmentIntercept(threatBall, sideStart, sideEnd)
+			this.logger.logStrategy('PolygonDefend', { threat: true })
+		} else {
+			this.targetSidePosition = this.polygonIntelligence.locateNearestThreat(allBalls, player, sideStart, sideEnd)
+			this.logger.logStrategy('PolygonIdle', { threat: false })
+		}
 	}
 
 	/**
@@ -146,225 +158,15 @@ export class BRNormalAIPlayer extends NormalAIPlayer
 			return
 		}
 
-		const ballComingToMe = isOnLeft ? ball.velocityX < 0 : ball.velocityX > 0
-		if (!ballComingToMe)
-		{
-			this.targetY = 300
-			return
+		const isIncoming = this.intelligence.isThreatIncoming(ball.velocityX, isOnLeft);
+
+		if (!isIncoming) {
+			this.targetY = 300;
+			return;
 		}
 
-		const myPaddle = activePlayers[myPlayerArrayIndex]!.paddle
-		const targetX = myPaddle.positionX + myPaddle.width / 2
-		const timeToTarget = (targetX - ball.positionX) / ball.velocityX
-
-		if (!isFinite(timeToTarget) || timeToTarget <= 0)
-		{
-			this.targetY = 300
-			return
-		}
-
-		let predictedY = ball.positionY + ball.velocityY * timeToTarget
-		const canvasH = 600
-		while (predictedY > canvasH || predictedY < 0)
-		{
-			if (predictedY > canvasH)
-				predictedY = 2 * canvasH - predictedY
-			else
-				predictedY = -predictedY
-		}
-		this.targetY = predictedY
-	}
-
-	/**
-	 * @brief Find position of nearest ball when no threat detected
-	 */
-	private findNearestBallPosition(
-		gameState: ReturnType<import('../game/game.js').GameService['getGameState']>,
-		player: Player,
-		sideStart: Point2D,
-		sideEnd: Point2D
-	): number
-	{
-		const allBalls: Ball[] = []
-		if (gameState.balls && gameState.balls.length > 0)
-			allBalls.push(...gameState.balls)
-		else if (gameState.ball)
-			allBalls.push(gameState.ball)
-
-		if (allBalls.length === 0)
-			return 0.5
-
-		let nearestBall: Ball | null = null
-		let nearestDist = Infinity
-		const sideMidX = (sideStart.x + sideEnd.x) / 2
-		const sideMidY = (sideStart.y + sideEnd.y) / 2
-
-		for (const ball of allBalls)
-		{
-			const dist = Math.sqrt(
-				Math.pow(ball.positionX - sideMidX, 2) +
-				Math.pow(ball.positionY - sideMidY, 2)
-			)
-			if (dist < nearestDist)
-			{
-				nearestDist = dist
-				nearestBall = ball
-			}
-		}
-
-		if (nearestBall)
-			return this.trackBallDirection(nearestBall, player)
-		return 0.5
-	}
-
-	/**
-	 * @brief Find the ball that poses the most threat to this player
-	 */
-	private findMostThreateningBall(
-		gameState: ReturnType<import('../game/game.js').GameService['getGameState']>,
-		player: Player,
-		sideStart: Point2D,
-		sideEnd: Point2D
-	): Ball | null
-	{
-		const allBalls: Ball[] = []
-		if (gameState.balls && gameState.balls.length > 0)
-			allBalls.push(...gameState.balls)
-		else if (gameState.ball)
-			allBalls.push(gameState.ball)
-
-		if (allBalls.length === 0)
-			return null
-
-		let bestBall: Ball | null = null
-		let bestTimeToImpact = Infinity
-
-		for (const ball of allBalls)
-		{
-			if (!this.isBallApproaching(ball, player))
-				continue
-
-			const timeToImpact = this.calculateTimeToImpact(ball, sideStart, sideEnd)
-			if (timeToImpact !== null && timeToImpact >= 0 && timeToImpact < bestTimeToImpact)
-			{
-				if (this.willBallHitSide(ball, sideStart, sideEnd))
-				{
-					bestTimeToImpact = timeToImpact
-					bestBall = ball
-				}
-			}
-		}
-		return bestBall
-	}
-
-	/**
-	 * @brief Calculate time for ball to reach the side segment
-	 */
-	private calculateTimeToImpact(ball: Ball, sideStart: Point2D, sideEnd: Point2D): number | null
-	{
-		const dx = sideEnd.x - sideStart.x
-		const dy = sideEnd.y - sideStart.y
-		const denom = ball.velocityX * dy - ball.velocityY * dx
-		if (Math.abs(denom) < 0.001)
-			return null
-		const t = ((sideStart.x - ball.positionX) * dy - (sideStart.y - ball.positionY) * dx) / denom
-		if (t < 0)
-			return null
-		return t
-	}
-
-	/**
-	 * @brief Check if ball trajectory will actually hit the side segment
-	 */
-	private willBallHitSide(ball: Ball, sideStart: Point2D, sideEnd: Point2D): boolean
-	{
-		const dx = sideEnd.x - sideStart.x
-		const dy = sideEnd.y - sideStart.y
-		const denom = ball.velocityX * dy - ball.velocityY * dx
-		if (Math.abs(denom) < 0.001)
-			return false
-		const t = ((sideStart.x - ball.positionX) * dy - (sideStart.y - ball.positionY) * dx) / denom
-		if (t < 0)
-			return false
-		const intersectX = ball.positionX + ball.velocityX * t
-		const intersectY = ball.positionY + ball.velocityY * t
-		const sideLength = Math.sqrt(dx * dx + dy * dy)
-		if (sideLength === 0)
-			return false
-		const projLength = ((intersectX - sideStart.x) * dx + (intersectY - sideStart.y) * dy) / sideLength
-		const normalizedPos = projLength / sideLength
-		return normalizedPos >= -0.1 && normalizedPos <= 1.1
-	}
-
-	/**
-	 * @brief Track ball direction when not approaching (go towards ball)
-	 * @param ball Ball object
-	 * @param player Player object
-	 * @returns Target position along side (0-1)
-	 */
-	private trackBallDirection(ball: Ball, player: Player): number
-	{
-		const sideStart = player.paddle.getSideStart()
-		const sideEnd = player.paddle.getSideEnd()
-		if (!sideStart || !sideEnd)
-			return 0.5
-		const sideAngle = player.paddle.angle
-		const sideMidX = (sideStart.x + sideEnd.x) / 2
-		const sideMidY = (sideStart.y + sideEnd.y) / 2
-		const ballOffset =
-			(ball.positionX - sideMidX) * Math.cos(sideAngle) +
-			(ball.positionY - sideMidY) * Math.sin(sideAngle)
-		const sideLength = Math.sqrt(
-			Math.pow(sideEnd.x - sideStart.x, 2) +
-			Math.pow(sideEnd.y - sideStart.y, 2)
-		)
-		let normalizedPos = 0.5 + (ballOffset / sideLength)
-		return Math.max(0.15, Math.min(0.85, normalizedPos))
-	}
-
-	/**
-	 * @brief Check if ball is approaching this player's side
-	 * @param ball Ball object
-	 * @param player Player object
-	 * @returns True if ball is moving towards this side
-	 */
-	private isBallApproaching(ball: Ball, player: Player): boolean
-	{
-		const paddle = player.paddle
-		const paddleAngle = paddle.angle
-		const sideNormalAngle = paddleAngle + Math.PI / 2
-		const velDotNormal =
-			ball.velocityX * Math.cos(sideNormalAngle) +
-			ball.velocityY * Math.sin(sideNormalAngle)
-		return velDotNormal > 0.1
-	}
-
-	/**
-	 * @brief Predict where ball will intersect the side segment using velocity
-	 * @param ball Ball object
-	 * @param sideStart Start point of side segment
-	 * @param sideEnd End point of side segment
-	 * @returns Target position along side (0-1)
-	 */
-	private predictInterceptOnSegment(ball: Ball, sideStart: Point2D, sideEnd: Point2D): number
-	{
-		const dx = sideEnd.x - sideStart.x
-		const dy = sideEnd.y - sideStart.y
-		const denom = ball.velocityX * dy - ball.velocityY * dx
-		if (Math.abs(denom) < 0.001)
-			return 0.5
-		const t = ((sideStart.x - ball.positionX) * dy - (sideStart.y - ball.positionY) * dx) / denom
-		if (t < 0)
-			return 0.5
-		const intersectX = ball.positionX + ball.velocityX * t
-		const intersectY = ball.positionY + ball.velocityY * t
-		const sideLength = Math.sqrt(dx * dx + dy * dy)
-		if (sideLength === 0)
-			return 0.5
-		const projLength =
-			((intersectX - sideStart.x) * dx + (intersectY - sideStart.y) * dy) / sideLength
-		let normalizedPos = projLength / sideLength
-		return Math.max(0.1, Math.min(0.9, normalizedPos))
+		const myPlayer = activePlayers[myPlayerArrayIndex]!;
+		this.targetY = this.intelligence.computeDefenseTarget(ball, myPlayer);
 	}
 
 	/**
@@ -384,12 +186,12 @@ export class BRNormalAIPlayer extends NormalAIPlayer
 	{
 		if (!player.itemSlots)
 			return
-		for (let slotIndex = 0; slotIndex < 3; slotIndex++)
-		{
+		
+		[0, 1, 2].forEach(slotIndex => {
 			const powerUp = player.itemSlots[slotIndex]
-			if (!powerUp || player.selectedSlots[slotIndex])
-				continue
-			this.requestSlotActivation(slotIndex, 3)
-		}
+			if (powerUp && !player.selectedSlots[slotIndex]) {
+				this.requestSlotActivation(slotIndex, 3)
+			}
+		});
 	}
 }

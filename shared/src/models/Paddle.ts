@@ -1,4 +1,5 @@
 import { Point2D } from '../types.js';
+import { GameObject } from "../core/GameObject.js";
 import {
     BR_PADDLE_LENGTH,
     BR_PADDLE_WIDTH,
@@ -13,15 +14,11 @@ import {
  * Supports both classic rectangular mode and polygon Battle Royale mode.
  * In polygon mode, paddle moves along a side with rotation.
  */
-export class Paddle
+export class Paddle extends GameObject
 {
-    public positionY: number;
-    public positionX: number;
     public dir: boolean;
     public angle: number;
     public sidePosition: number;
-    public width: number;
-    public height: number;
     public readonly speed: number;
     private sideStart: Point2D | null;
     private sideEnd: Point2D | null;
@@ -44,8 +41,7 @@ export class Paddle
         speed: number = BR_PADDLE_SPEED
     )
     {
-        this.positionX = positionX;
-        this.positionY = positionY;
+        super(positionX, positionY);
         this.width = width;
         this.height = height;
         this.speed = speed;
@@ -56,6 +52,10 @@ export class Paddle
         this.sideEnd = null;
         this.sideLength = 0;
         this.cornerMargin = 0;
+    }
+
+    public update(deltaTime: number): void {
+        // Paddle update logic is typically handled by input, but we can put interpolation here if needed
     }
 
     /**

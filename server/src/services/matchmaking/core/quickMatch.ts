@@ -3,19 +3,20 @@ import { WebSocketMessage } from '../../../types.js'
 import { Player } from './types.js'
 import { GameRoomManager } from '../game/gameRoomManager.js'
 import { sendMessage } from '../../../utils/websocket.js'
+import { QueueManager } from './QueueManager.js'
 
 /**
  * @brief Handles quick 1v1 matchmaking with separate normal/custom queues
  */
 export class QuickMatchService
 {
-	private waitingNormalPlayers: Player[] = []
-	private waitingCustomPlayers: Player[] = []
+	private queueManager: QueueManager
 	private gameRoomManager: GameRoomManager
 
 	constructor(gameRoomManager: GameRoomManager)
 	{
 		this.gameRoomManager = gameRoomManager
+		this.queueManager = new QueueManager()
 	}
 
 	/**
@@ -26,25 +27,25 @@ export class QuickMatchService
 	 */
 	public addToQueue(socket: WebSocket, playerName: string, isCustom: boolean): void
 	{
-		const waitingQueue = isCustom ? this.waitingCustomPlayers : this.waitingNormalPlayers
-		const modeStr = isCustom ? 'custom' : 'normal'
+		const mode = isCustom ? 'custom' : 'normal'
 		const player: Player = {
 			socket,
 			name: playerName,
 			id: Math.random().toString(36).substr(2, 9)
 		}
-		if (waitingQueue.length >= 1)
+		
+		if (this.queueManager.getQueueLength(mode) >= 1)
 		{
-			const opponent = waitingQueue.pop()!
-			console.log(`[QUICK_MATCH] Creating ${modeStr} game: ${opponent.name} vs ${player.name}`)
+			const opponent = this.queueManager.dequeue(mode)!
+			console.log(`[QUICK_MATCH] Creating ${mode} game: ${opponent.name} vs ${player.name}`)
 			const gameId = this.gameRoomManager.createGame(opponent, player, isCustom, 'normal', 5)
 			sendMessage(opponent.socket, { type: 'gameStart', playerRole: 'player1', player1Name: opponent.name, player2Name: player.name })
 			sendMessage(player.socket, { type: 'gameStart', playerRole: 'player2', player1Name: opponent.name, player2Name: player.name })
 		}
 		else
 		{
-			waitingQueue.push(player)
-			console.log(`[QUICK_MATCH] ${player.name} waiting for ${modeStr} game (${waitingQueue.length}/2)`)
+			this.queueManager.enqueue(player, mode)
+			console.log(`[QUICK_MATCH] ${player.name} waiting for ${mode} game (${this.queueManager.getQueueLength(mode)}/2)`)
 			sendMessage(socket, { type: 'waiting' })
 			sendMessage(socket, { type: 'playerJoined', playerCount: 1 })
 		}
@@ -78,12 +79,6 @@ export class QuickMatchService
 	 */
 	public removeFromQueue(socket: WebSocket): boolean
 	{
-		const normalIndex = this.waitingNormalPlayers.findIndex(p => p.socket === socket)
-		const customIndex = this.waitingCustomPlayers.findIndex(p => p.socket === socket)
-		if (normalIndex > -1)
-			return this.waitingNormalPlayers.splice(normalIndex, 1), true
-		if (customIndex > -1)
-			return this.waitingCustomPlayers.splice(customIndex, 1), true
-		return false
+		return this.queueManager.removePlayer(socket)
 	}
 }

@@ -1,5 +1,6 @@
 import { Paddle } from "./Paddle.js";
 import { Point2D } from "../types.js";
+import { GameObject } from "../core/GameObject.js";
 import {
     curveAcceleration,
     BR_BALL_INITIAL_SPEED,
@@ -12,10 +13,8 @@ export const velYfactor = 500;
 /**
  * @brief Game ball physics and movement
  */
-export class Ball
+export class Ball extends GameObject
 {
-    public positionX: number;
-    public positionY: number;
     public velocityX: number;
     public velocityY: number;
     public rotation: number;
@@ -42,6 +41,7 @@ export class Ball
             if (randomX > 0.5)
                 this.velocityX = -this.velocityX;
         }
+        this.logEvent('ballStart', `Velocity: ${this.velocityX}, ${this.velocityY}`);
     }
 
     /**
@@ -53,8 +53,7 @@ export class Ball
      */
     constructor(positionX: number, positionY: number, velocityX: number = CLASSIC_BALL_INITIAL_SPEED, polygonMode: boolean = false)
     {
-        this.positionX = positionX;
-        this.positionY = positionY;
+        super(positionX, positionY);
         this.velocityX = velocityX;
         this.velocityY = 0;
         this.rotation = 0;
@@ -321,4 +320,5 @@ export class Ball
     {
         return this.size / 2;
     }
+
 }

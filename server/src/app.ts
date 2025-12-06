@@ -2,27 +2,35 @@ import fastify from 'fastify'
 import { registerPlugins } from './plugins/plugins.js'
 import { registerRoutes } from './routes/routes.js'
 import { paths } from './config/paths.js'
-import { register } from 'module';
 
-export async function createApp() { //*no network binding. Just registering stuff
+/**
+ * Creates and configures the Fastify application instance.
+ * This function handles plugin and route registration without network binding.
+ * @returns Configured Fastify server instance ready for listening
+ */
+export async function createApp() {
 	const server = fastify({ logger: false });
 
-	console.log('Server paths:')
-    console.log('  Current directory:', process.cwd())
-    console.log('  __dirname:', paths.__dirname)
-    console.log('  Public path:', paths.public)
-    console.log('  Dist path:', paths.dist)
-    console.log('  Index path:', paths.index)
-
 	try {
-		await registerPlugins(server);
-		console.log('✅ Plugins registered')
+		// Register all API and static routes
 		await registerRoutes(server);
-		console.log('✅ Routes registered')
+		console.log('[APP] Route registration completed successfully')
+
+		// Register all server plugins (websocket, cookies, multipart, static files)
+		await registerPlugins(server);
+		console.log('[APP] Plugin registration completed successfully')
 	} catch (error) {
-		console.error('[ERROR] ', error);
+		console.error('[APP] Fatal error during server initialization:', error);
 		throw error;
 	}
+
+	// Log server path configuration for debugging purposes
+	console.log('[APP] Server path configuration:')
+	console.log('[APP]   Index file:', paths.index)
+	console.log('[APP]   Distribution:', paths.dist)
+	console.log('[APP]   Public assets:', paths.public)
+	console.log('[APP]   Module directory:', paths.__dirname)
+	console.log('[APP]   Working directory:', process.cwd())
 
 	return server;
 }

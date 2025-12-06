@@ -1,78 +1,76 @@
-export class BadRequest extends Error
-{
-	status: number;
-	constructor(message: string, status: number = 400)
-	{
-		super(message);
-		this.name = '';
-		this.status = status;
-	}
+export class AppError extends Error {
+    public readonly timestamp: Date;
+    public readonly statusCode: number;
+    public readonly code?: string;
+
+    constructor(message: string, statusCode: number = 500, code?: string) {
+        super(message);
+        this.name = this.constructor.name;
+        this.statusCode = statusCode;
+        this.code = code;
+        this.timestamp = new Date();
+    }
+
+    public toJSON() {
+        return {
+            error: this.name,
+            message: this.message,
+            code: this.code,
+            statusCode: this.statusCode,
+            timestamp: this.timestamp
+        };
+    }
 }
 
-export class ServerError extends Error 
-{
-	code: string | undefined;
-	statusCode: number;
-	constructor(message: string, code?: string, statusCode: number = 500)
-	{
-		super(message);
-		this.name = '';
-		this.statusCode = statusCode;
-		this.code = code;
-	}
+export class InputValidationError extends AppError {
+    constructor(message: string, status: number = 400) {
+        super(message, status);
+    }
+
+    // Backward compatibility getter
+    get status(): number {
+        return this.statusCode;
+    }
 }
 
-export class DatabaseError extends Error 
-{
-	code: string | undefined;
-	statusCode: number;
-	constructor(message: string, code?: string, statusCode: number = 500)
-	{
-		super(message);
-		this.name = '';
-		this.statusCode = statusCode;
-		this.code = code;
-	}
+export class InternalSystemError extends AppError {
+    constructor(message: string, code?: string, statusCode: number = 500) {
+        super(message, statusCode, code);
+    }
 }
 
-export class UserError extends Error
-{
-	code: string | undefined;
-	statusCode: number;
-	constructor(message: string, code?: string, statusCode: number = 400)
-	{
-		super(message);
-		this.name = '';
-		this.statusCode = statusCode;
-		this.code = code;
-	}
+export class DataPersistenceError extends AppError {
+    constructor(message: string, code?: string, statusCode: number = 500) {
+        super(message, statusCode, code);
+    }
 }
 
-export class TournamentError extends Error
-{
-	code: string | undefined;
-	statusCode: number;
-	constructor(message: string, code?: string, statusCode: number = 500)
-	{
-		super(message);
-		this.name = '';
-		this.statusCode = statusCode;
-		this.code = code;
-	}
+export class BusinessLogicError extends AppError {
+    constructor(message: string, code?: string, statusCode: number = 400) {
+        super(message, statusCode, code);
+    }
 }
 
-export class BracketError extends Error
-{
-	code: string | undefined;
-	statusCode: number;
-	constructor(message: string, code?: string, statusCode: number = 500)
-	{
-		super(message);
-		this.name = '';
-		this.statusCode = statusCode;
-		this.code = code;
-	}
+// Aliases for backward compatibility
+export { InputValidationError as BadRequest };
+export { InternalSystemError as ServerError };
+export { DataPersistenceError as DatabaseError };
+export { BusinessLogicError as UserError };
+
+export class TournamentOperationError extends AppError {
+    constructor(message: string, code?: string, statusCode: number = 500) {
+        super(message, statusCode, code);
+    }
 }
+
+export class BracketStructureError extends AppError {
+    constructor(message: string, code?: string, statusCode: number = 500) {
+        super(message, statusCode, code);
+    }
+}
+
+export { TournamentOperationError as TournamentError };
+export { BracketStructureError as BracketError };
 
 
 export enum errTournament {

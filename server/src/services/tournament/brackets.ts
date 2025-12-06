@@ -1,8 +1,8 @@
 import { getDatabase } from "../../db/databaseSingleton.js";
 import { randomInt } from "crypto";
 import { BracketError } from "@app/shared/errors.js"
-import { machine } from "os";
-import { match } from "assert";
+import { BracketMath } from "./core/BracketMath.js";
+import { TournamentLogger } from "./core/TournamentLogger.js";
 
 export interface Match {
     id: string;
@@ -36,15 +36,17 @@ export class SingleEliminationBracket implements BracketService
 {
 	private db = getDatabase();
 	private movedPlayers = new Map<string, number>();
-	private	maxRound: number = 0;
 	public readonly	tournamentId: string = "";
 	public readonly	tournamentName: string = "";
+    private logger: TournamentLogger;
 
 	constructor(tournamentId:string, tournamentName: string)
 	{
 		this.tournamentId = tournamentId;
 		this.tournamentName = tournamentName;
+        this.logger = new TournamentLogger(tournamentId);
 	}
+
 	/**
 	 * @brief Generates the complete bracket structure for a tournament
 	 * @param tournamentPlayers Optional array of players (for bots support)
@@ -53,20 +55,22 @@ export class SingleEliminationBracket implements BracketService
 	public	generateBracket(tournamentPlayers?: Array<{id: string, alias: string}>): Match[][]
 	{
 		let brackets: Match[][] = [];
-		let totalMatches: number = this.findTotalNumberOfMatches(this.db.getTournament(this.tournamentId, undefined), tournamentPlayers);
-		let players: Array<{player_id: string, alias: string}> = []
+        
+        let players: Array<{player_id: string, alias: string}> = []
 		if (tournamentPlayers && tournamentPlayers.length > 0)
 			players = tournamentPlayers.map(p => ({ player_id: p.id, alias: p.alias }))
 		else
 			players = this.db.getTournamentPlayers(this.tournamentId)
-		let playersCount = players.length;
+		
+        let playersCount = players.length;
+        let totalMatches: number = BracketMath.calculateTotalMatches(playersCount);
 		let round = 0;
 		
-		console.log(`[BRACKET] Generating bracket for ${playersCount} players`);
+		this.logger.log(`Generating bracket for ${playersCount} players`);
 
-		while (totalMatches)
+		while (totalMatches > 0)
 		{
-			let roundMatches = this.getMatchesPerRound(playersCount);
+			let roundMatches = BracketMath.calculateMatchesForRound(playersCount);
 			const matches: Match[] = [];
 
 			let i = 0;
@@ -116,6 +120,7 @@ export class SingleEliminationBracket implements BracketService
 		else
 			match.winnerAlias = winnerId === match.player1Id ? match.player1Alias : match.player2Alias
 		match.status = "completed";
+        this.logger.logMatchUpdate(match.id, "completed");
 	}
 
 	/**
@@ -201,34 +206,6 @@ export class SingleEliminationBracket implements BracketService
 	}
 
 	/**
- 	* @brief Calculates total number of matches needed for a tournament
- 	* @param tournament The tournament object containing player count
-	* @param tournamentPlayers Optional array of players (for bots support)
- 	* @return Total number of matches (always player count - 1)
- 	* @throws Error if tournament is undefined
- 	*/
-	private findTotalNumberOfMatches(tournament: any, tournamentPlayers?: Array<{id: string, alias: string}>): number
-	{
-		if (tournamentPlayers && tournamentPlayers.length > 0)
-			return tournamentPlayers.length - 1
-		if (tournament === undefined)
-			throw new BracketError(`findMaxRound: Couldn't find tournament ${this.tournamentName} in database`);
-		
-		let nbPlayers: number = tournament.curr_nb_players;
-		return nbPlayers - 1;
-	}
-
-
-	/**
-	 * @brief Calculates how many matches are needed in a specific round
-	 * @return Number of matches for the round (half of player count)
-	 */
-	private getMatchesPerRound(nbPlayers: number): number
-	{
-		return Math.floor(nbPlayers / 2) 
-	}
-
-	/**
  	* @brief Creates and stores a match for the first round
  	* @param player1 First player object with id and alias
  	* @param player2 Second player object with id and alias
@@ -278,7 +255,7 @@ export class SingleEliminationBracket implements BracketService
 		this.advanceWinner(nextNextMatch, toMovePlayer!.id, toMovePlayer!.alias, 1);
 		let toDeleteIndex = winners.indexOf(toMovePlayer!);
 		winners.splice(toDeleteIndex, 1);
-		console.log(`moved player is ${toMovePlayer?.alias}`);
+		this.logger.log(`moved player is ${toMovePlayer?.alias}`);
 	}
 
 	public hasPlayer(matches: Match[]): boolean

@@ -5,8 +5,8 @@ import { PolygonData, PowerUpFruit } from "@app/shared/types.js";
 import { paddleOffset, FRUIT_FREQUENCY, defaultLifeCount } from "@app/shared/consts.js";
 import { CloneBallManager } from "./cloneBalls.js";
 import { FruitManager } from "./fruits.js";
-import { CollisionManager, CollisionDetector, PolygonCollisionManager } from "./collisions.js";
-import { ScoringManager } from "./scoring.js";
+import { PhysicsEngine } from "./managers/PhysicsEngine.js";
+import { ScoreKeeper } from "./managers/ScoreKeeper.js";
 import { GeometryManager } from "./geometry.js";
 
 export type PlayerInput = {
@@ -421,7 +421,7 @@ export class GameService
 					continue;
 
 				const activeSideIndex = this.getActiveSideIndex(i);
-				const hit = PolygonCollisionManager.handlePaddleCollision(
+				const hit = PhysicsEngine.resolvePolygonPaddleHit(
 					player,
 					ball,
 					this.geometry,
@@ -441,7 +441,7 @@ export class GameService
 				}
 			}
 
-			const sideHit = PolygonCollisionManager.checkBoundary(
+			const sideHit = PhysicsEngine.checkPolygonBoundary(
 				ball,
 				this.geometry,
 				this.activePlayerCount,
@@ -456,7 +456,7 @@ export class GameService
 						? this.players[ball.lastTouchedPlayerIndex]
 						: null;
 
-					const eliminated = ScoringManager.handlePolygonScore(
+					const eliminated = ScoreKeeper.processPolygonPoint(
 						player,
 						ball,
 						this.polygonData.center,
@@ -593,7 +593,7 @@ export class GameService
 		if (this.playerCount > 2)
 			return this.updateBattleRoyaleClassicCollisions();
 
-		const [gameOver, lastTouch] = CollisionManager.checkAll(
+		const [gameOver, lastTouch] = PhysicsEngine.processClassicCollisions(
 			this.players,
 			this.ball,
 			this.cloneBalls,
@@ -620,25 +620,25 @@ export class GameService
 		if (activePlayers.length !== 2)
 			return false;
 
-		CollisionDetector.checkYCollisions(this.ball, this.canvasHeight);
+		PhysicsEngine.enforceVerticalBoundaries(this.ball, this.canvasHeight);
 
 		const [p1, p2] = activePlayers;
 		const p1Index = this.players.indexOf(p1!);
 		const p2Index = this.players.indexOf(p2!);
 
 		let lastTouchedPlayerIndex = -1;
-		const p1Touch = CollisionManager.checkPaddleTouch(
-			this.players, p1Index, this.ball, this.cloneBalls,
-			this.ball.velocityX < 0, this.isCustomMode
-		);
-		const p2Touch = CollisionManager.checkPaddleTouch(
-			this.players, p2Index, this.ball, this.cloneBalls,
-			this.ball.velocityX > 0, this.isCustomMode
-		);
-		if (p1Touch >= 0)
-			lastTouchedPlayerIndex = p1Touch;
-		if (p2Touch >= 0)
-			lastTouchedPlayerIndex = p2Touch;
+		
+		if (this.ball.velocityX < 0) {
+			if (PhysicsEngine.resolvePaddleHit(this.players, p1Index, this.ball, this.cloneBalls, this.isCustomMode)) {
+				lastTouchedPlayerIndex = p1Index;
+			}
+		}
+		
+		if (this.ball.velocityX > 0) {
+			if (PhysicsEngine.resolvePaddleHit(this.players, p2Index, this.ball, this.cloneBalls, this.isCustomMode)) {
+				lastTouchedPlayerIndex = p2Index;
+			}
+		}
 
 		if (lastTouchedPlayerIndex >= 0)
 		{
@@ -648,27 +648,11 @@ export class GameService
 
 		if (this.ball.positionX < 0)
 		{
-			const loser = p1!;
-			loser.loseLife();
-			console.log(`[BR-Classic] ${loser.name} lost a life! ${loser.lives} remaining`);
-			this.ball.reset(this.canvasWidth, this.canvasHeight);
-			if (loser.isEliminated())
-			{
-				console.log(`[BR-Classic] Game Over! Winner: ${p2!.name}`);
-				return true;
-			}
+			return PhysicsEngine.resolveScoring(this.players, p1Index, this.ball, this.cloneBalls, this.canvasWidth, this.canvasHeight, this.isCustomMode);
 		}
 		else if (this.ball.positionX > this.canvasWidth)
 		{
-			const loser = p2!;
-			loser.loseLife();
-			console.log(`[BR-Classic] ${loser.name} lost a life! ${loser.lives} remaining`);
-			this.ball.reset(this.canvasWidth, this.canvasHeight);
-			if (loser.isEliminated())
-			{
-				console.log(`[BR-Classic] Game Over! Winner: ${p1!.name}`);
-				return true;
-			}
+			return PhysicsEngine.resolveScoring(this.players, p2Index, this.ball, this.cloneBalls, this.canvasWidth, this.canvasHeight, this.isCustomMode);
 		}
 		return false;
 	}
