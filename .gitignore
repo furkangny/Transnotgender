@@ -1,0 +1,14 @@
+node_modules/
+.env
+.DS_Store
+dist/
+build/
+*.log
+.vscode/
+server/auth-service/auth.db.sqlite
+server/relationships-service/relationships.db.sqlite 
+server/profile-service/profile.db.sqlite
+server/notifications-service/notifications.db.sqlite
+server/chat-service/messages.db.sqlite
+server/game-service/db/game.db.sqlite
+server/profile-service/uploads/
