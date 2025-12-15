@@ -109,8 +109,8 @@ export function handleSignUp() {
       const response = await fetch("/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userInfos),
         credentials: "include",
+        body: JSON.stringify(userInfos),
       });
 
       const result = await response.json();

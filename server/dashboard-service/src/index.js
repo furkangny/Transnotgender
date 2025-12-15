@@ -1,3 +1,7 @@
+/*
+ * Dashboard Service - Main Entry Point
+ * Provides real-time dashboard data via WebSocket
+ */
 import fastify from "fastify";
 import dotenv from 'dotenv';
 import websocket from "@fastify/websocket";
@@ -5,39 +9,47 @@ import redisPlugin from "./plugins/redis-plugin.js";
 import rabbitmqPlugin from "./plugins/rabbitmq-plugin.js";
 import { dashboardEndpoints } from "./routes/dashboardEndpoints.js";
 
-const server = fastify({ logger: true });
-
+// Load environment configuration
 dotenv.config();
 
-await server.register(redisPlugin);
-await server.register(rabbitmqPlugin);
-await server.register(websocket);
+// Initialize Fastify app
+const app = fastify({ logger: true });
 
-await server.register(dashboardEndpoints, { prefix: '/dashboard' });
+// Register plugins
+await app.register(redisPlugin);
+await app.register(rabbitmqPlugin);
+await app.register(websocket);
 
-const start = async () => {
+// Register route handlers
+await app.register(dashboardEndpoints, { prefix: '/dashboard' });
+
+// Bootstrap server
+const bootstrap = async () => {
     try {
-        await server.listen({ host: `${process.env.HOST_NAME}`, port: 3005 });
-        server.log.info("Server is listening on port 3005");
-    }
-    catch (err) {
-        server.log.error(err);
+        const hostAddress = process.env.HOST_NAME;
+        const portNumber = 3005;
+        await app.listen({ host: hostAddress, port: portNumber });
+        app.log.info("Server is listening on port 3005");
+    } catch (err) {
+        app.log.error(err);
         process.exit(1);
     }
 };
 
-start();
+bootstrap();
 
-const handleShutDown = async (signal) => {
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
     try {
         console.log(`Caught a signal or type ${signal}`);
-        await server.rabbit.close();
-        await server.redis.close();
+        await app.rabbit.close();
+        await app.redis.close();
         process.exit(0);
-    } catch (error) {
-        console.log(error);
+    } catch (err) {
+        console.log(err);
         process.exit(0);
     }
 }
-process.on('SIGINT', handleShutDown);
-process.on('SIGTERM', handleShutDown);
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

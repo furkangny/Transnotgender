@@ -1,3 +1,7 @@
+/*
+ * Relationships Service - Main Entry Point
+ * Manages friend connections and user blocking
+ */
 import fastify from 'fastify';
 import dotenv from 'dotenv';
 import sqlitePlugin from './plugins/sqlite-plugin.js'
@@ -8,59 +12,72 @@ import { removeAllConnections } from './models/connectionRepository.js';
 import { initRestrictionTable } from './database/initRestrictionTable.js';
 import restrictionEndpoints from './routes/restrictionEndpoints.js';
 import redisPlugin from './plugins/redis-plugin.js';
+
+// Load environment configuration
 dotenv.config();
 
-const server = fastify({ logger: true });
+// Initialize Fastify app
+const app = fastify({ logger: true });
 
-await server.register(sqlitePlugin);
-await initConnectionTable(server.db);
-await initRestrictionTable(server.db);
+// Register database plugin
+await app.register(sqlitePlugin);
 
-await server.register(rabbitmqPlugin);
-await server.register(redisPlugin);
+// Initialize database tables
+await initConnectionTable(app.db);
+await initRestrictionTable(app.db);
 
+// Register message queue and cache
+await app.register(rabbitmqPlugin);
+await app.register(redisPlugin);
 
-server.rabbit.consumeMessages(async (request) => {
-    if (request.type === 'DELETE') {
-        const userId = request.userId;
-        const idExist = await server.redis.sIsMember('userIds', `${userId}`);
-        console.log('idExist value: ', idExist);
-        if (idExist)
-            await removeAllConnections(server.db, userId);
+// Message queue consumer for user deletion
+app.rabbit.consumeMessages(async (incomingMsg) => {
+    if (incomingMsg.type === 'DELETE') {
+        const targetUserId = incomingMsg.userId;
+        const userExists = await app.redis.sIsMember('userIds', `${targetUserId}`);
+        console.log('idExist value: ', userExists);
+        
+        if (userExists) {
+            await removeAllConnections(app.db, targetUserId);
+        }
     }
-})
+});
 
-
-await server.register(connectionEndpoints, { prefix: '/friends' });
-await server.register(restrictionEndpoints, { prefix: '/block' });
+// Register route handlers
+await app.register(connectionEndpoints, { prefix: '/friends' });
+await app.register(restrictionEndpoints, { prefix: '/block' });
 
 console.log("relationships service initialization is done...");
 
-const start = async () => {
+// Bootstrap server
+const bootstrap = async () => {
     try {
-        await server.listen({ host: `${process.env.HOST_NAME}`, port: 3002 });
-        server.log.info("Server is listening on port 3002");
-    }
-    catch (err) {
-        server.log.error(err);
+        const hostAddress = process.env.HOST_NAME;
+        const portNumber = 3002;
+        await app.listen({ host: hostAddress, port: portNumber });
+        app.log.info("Server is listening on port 3002");
+    } catch (err) {
+        app.log.error(err);
         process.exit(1);
     }
 };
 
-start();
+bootstrap();
 
-const handleShutDown = async (signal) => {
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
     try {
         console.log(`Caught a signal or type ${signal}`);
-        await server.redis.close();
-        await server.db.close();
-        await server.rabbit.close();
-        await server.close();
+        await app.redis.close();
+        await app.db.close();
+        await app.rabbit.close();
+        await app.close();
         process.exit(0);
-    } catch (error) {
-        console.log(error);
+    } catch (err) {
+        console.log(err);
         process.exit(0);
     }
 }
-process.on('SIGINT', handleShutDown);
-process.on('SIGTERM', handleShutDown);
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

@@ -1,3 +1,8 @@
+/*
+ * Member Manager Controller
+ * Handles profile CRUD operations and avatar uploads
+ */
+
 import {
     retrieveAllMembers,
     checkUsernameExists,
@@ -11,39 +16,48 @@ import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import { verifyWSToken } from "../middleware/tokenGuard.js";
 
-export async function fetchMemberDetails(request, reply) {
+// Allowed image extensions
+const ALLOWED_EXTENSIONS = ['.webp', '.jpeg', '.jpg', '.png'];
+
+/*
+ * Get Member Profile
+ */
+export async function fetchMemberDetails(req, res) {
     try {
-        const { id } = request.params;
+        const { id } = req.params;
 
         const profile = await locateMemberById(this.db, id);
         if (!profile)
-            return reply.code(400).send(createResponse(400, 'PROFILE_NOT_FOUND'));
+            return res.code(400).send(createResponse(400, 'PROFILE_NOT_FOUND'));
 
-        return reply.code(200).send(createResponse(200, 'PROFILE_FETCHED', { profile: profile }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'PROFILE_FETCHED', { profile: profile }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function modifyMemberDetails(request, reply) {
+/*
+ * Update Member Profile
+ */
+export async function modifyMemberDetails(req, res) {
     try {
-        const { id } = request.params;
-        const tokenId = request.user?.id;
+        const { id } = req.params;
+        const tokenId = req.user?.id;
         if (tokenId != id)
-            return reply.code(403).send(createResponse(403, 'UNAUTHORIZED'));
+            return res.code(403).send(createResponse(403, 'UNAUTHORIZED'));
 
-        const { username, matches_won, matches_lost, hasWon } = request.body;
+        const { username, matches_won, matches_lost, hasWon } = req.body;
 
         const profile = await locateMemberById(this.db, id);
         if (!profile)
-            return reply.code(400).send(createResponse(400, 'PROFILE_NOT_FOUND'));
+            return res.code(400).send(createResponse(400, 'PROFILE_NOT_FOUND'));
 
         const updatedFields = {};
         if (username) {
-            const dupUser = await checkUsernameExists(this.db, username);
-            if (dupUser)
-                return reply.code(400).send(createResponse(400, 'USERNAME_EXISTS'));
+            const duplicateUser = await checkUsernameExists(this.db, username);
+            if (duplicateUser)
+                return res.code(400).send(createResponse(400, 'USERNAME_EXISTS'));
             updatedFields.username = username;
             this.rabbit.produceMessage({
                 id: id,
@@ -64,11 +78,11 @@ export async function modifyMemberDetails(request, reply) {
 
 
         if (Object.keys(updatedFields).length === 0)
-            return reply.code(400).send(createResponse(400, 'MISSING_FIELDS'));
+            return res.code(400).send(createResponse(400, 'MISSING_FIELDS'));
 
         const changes = await modifyMemberById(this.db, id, updatedFields);
         if (changes === 0)
-            return reply.code(400).send(createResponse(400, 'ZERO_CHANGES'));
+            return res.code(400).send(createResponse(400, 'ZERO_CHANGES'));
         const updatedProfile = await locateMemberById(this.db, id);
         await this.redis.sendCommand([
             'JSON.SET',
@@ -78,123 +92,136 @@ export async function modifyMemberDetails(request, reply) {
         ])
 
 
-        return reply.code(200).send(createResponse(200, 'PROFILE_UPDATED', { profile: updatedProfile }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'PROFILE_UPDATED', { profile: updatedProfile }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function uploadMemberPhoto(request, reply) {
+/*
+ * Upload Member Avatar
+ */
+export async function uploadMemberPhoto(req, res) {
     try {
-        const userId = request.user?.id;
-        const data = await request.file();
-        data.file.on('limit', () => {
-            return reply.code(413).send(createResponse(400, 'FILE_TOO_LARGE'));
+        const memberId = req.user?.id;
+        const fileData = await req.file();
+        fileData.file.on('limit', () => {
+            return res.code(413).send(createResponse(400, 'FILE_TOO_LARGE'));
         })
-        console.log('DATA received: ', data);
-        if (!data)
-            return reply.code(400).send(createResponse(400, 'FILE_REQUIRED'));
+        console.log('DATA received: ', fileData);
+        if (!fileData)
+            return res.code(400).send(createResponse(400, 'FILE_REQUIRED'));
 
-        const ext = path.extname(data.filename);
-        if (ext !== '.webp' && ext !== '.jpeg' && ext !== '.jpg' && ext !== '.png')
-            return reply.code(400).send(createResponse(400, 'UNSUPPORTED_FILE_TYPE'));
-        const fileName = `${userId}_${Date.now()}${ext}`;
+        const fileExt = path.extname(fileData.filename);
+        if (!ALLOWED_EXTENSIONS.includes(fileExt))
+            return res.code(400).send(createResponse(400, 'UNSUPPORTED_FILE_TYPE'));
+        const fileName = `${memberId}_${Date.now()}${fileExt}`;
         const uploadPath = path.join(process.cwd(), 'uploads', 'avatars', fileName);
         console.log("Upload path: ", uploadPath);
         fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
 
-        await pipeline(data.file, fs.createWriteStream(uploadPath));
+        await pipeline(fileData.file, fs.createWriteStream(uploadPath));
 
-        await modifyMemberPhotoById(this.db, userId, fileName);
-        const updatedProfile = await locateMemberById(this.db, userId);
+        await modifyMemberPhotoById(this.db, memberId, fileName);
+        const updatedProfile = await locateMemberById(this.db, memberId);
         await this.redis.sendCommand([
             'JSON.SET',
-            `player:${userId}`,
+            `player:${memberId}`,
             '$',
             JSON.stringify(updatedProfile)
         ])
-        return reply.code(200).send(createResponse(200, 'AVATAR_UPLOADED', { avatar_url: fileName }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'AVATAR_UPLOADED', { avatar_url: fileName }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function fetchMemberPhoto(request, reply) {
+/*
+ * Get Member Avatar
+ */
+export async function fetchMemberPhoto(req, res) {
     try {
-        const { fileName } = request.params;
+        const { fileName } = req.params;
         if (!fileName)
-            return reply.code(400).send(createResponse(400, 'FILENAME_REQUIRED'));
+            return res.code(400).send(createResponse(400, 'FILENAME_REQUIRED'));
 
         const filePath = path.join(process.cwd(), 'uploads', 'avatars', fileName);
         if (!fs.existsSync(filePath))
-            return reply.code(404).send(createResponse(404, 'FILE_NOT_FOUND'));
+            return res.code(404).send(createResponse(404, 'FILE_NOT_FOUND'));
 
-        const ext = path.extname(fileName).toLowerCase();
-        const mimeType = ((ext === '.jpeg' || ext === '.jpg') ? 'image/jpeg' :
-            ext === '.png' ? 'image/png' :
-                ext === '.webp' ? 'image/webp' :
+        const fileExt = path.extname(fileName).toLowerCase();
+        const mimeType = ((fileExt === '.jpeg' || fileExt === '.jpg') ? 'image/jpeg' :
+            fileExt === '.png' ? 'image/png' :
+                fileExt === '.webp' ? 'image/webp' :
                     'application/octet-stream');
         const stream = fs.createReadStream(filePath);
 
-        stream.on('error', (err) => {
-            console.error('Stream error:', err);
-            reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        stream.on('error', (streamErr) => {
+            console.error('Stream error:', streamErr);
+            res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
         });
 
-        return reply.type(mimeType).send(stream);
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.type(mimeType).send(stream);
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function fetchAllMembers(request, reply) {
+/*
+ * Get All Members
+ */
+export async function fetchAllMembers(req, res) {
     try {
         const allProfiles = await retrieveAllMembers(this.db);
-        return reply.code(200).send(createResponse(200, 'PROFILES_FETCHED', { profiles: allProfiles }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'PROFILES_FETCHED', { profiles: allProfiles }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
 
-const onlineUsers = new Map();
+// Active WebSocket connections by userId
+const activeConnections = new Map();
 
-export async function retrieveOnlineStates(socket, request) {
+/*
+ * WebSocket - Online Status Tracker
+ */
+export async function retrieveOnlineStates(socket, req) {
     try {
         socket.userId = null;
         socket.isAuthenticated = false;
-        await verifyWSToken(socket, request, this.redis);
+        await verifyWSToken(socket, req, this.redis);
         if (socket.userId) {
-            if (!onlineUsers.has(socket.userId))
-                onlineUsers.set(socket.userId, new Set());
-            onlineUsers.get(socket.userId).add(socket);
-            displayOnlineStatuses(this.db, socket, onlineUsers);
+            if (!activeConnections.has(socket.userId))
+                activeConnections.set(socket.userId, new Set());
+            activeConnections.get(socket.userId).add(socket);
+            displayOnlineStatuses(this.db, socket, activeConnections);
         }
         else {
             socket.close(3000, 'Unauthorized');
             return;
         }
 
-        setInterval(displayOnlineStatuses, 5000, this.db, socket, onlineUsers);
+        setInterval(displayOnlineStatuses, 5000, this.db, socket, activeConnections);
 
-        socket.on('error', (error) => {
-            console.error('FastifyWebSocket: Client error:', error);
+        socket.on('error', (socketErr) => {
+            console.error('FastifyWebSocket: Client error:', socketErr);
         });
 
         socket.on('close', () => {
             console.log('FastifyWebSocket: Client disconnected.');
-            if (socket.isAuthenticated && onlineUsers.has(socket.userId)) {
-                onlineUsers.get(socket.userId).delete(socket);
-                if (onlineUsers.get(socket.userId).size === 0)
-                    onlineUsers.delete(socket.userId);
+            if (socket.isAuthenticated && activeConnections.has(socket.userId)) {
+                activeConnections.get(socket.userId).delete(socket);
+                if (activeConnections.get(socket.userId).size === 0)
+                    activeConnections.delete(socket.userId);
             }
         })
-    } catch (error) {
-        console.log(error);
+    } catch (err) {
+        console.log(err);
         socket.close(1008, 'Malformed payload');
     }
 }

@@ -1,3 +1,8 @@
+/*
+ * Email 2FA Controller
+ * Handles email-based OTP verification
+ */
+
 import {
     insertToken,
     locateValidTokenByAccountId
@@ -15,106 +20,118 @@ import { locateAccountById } from '../models/accountRepository.js';
 import { clearSessionCookies, setSessionCookies } from '../utils/cookieManager.js';
 import { createResponse } from '../utils/helpers.js';
 
-export async function setup2FAEmail(request, reply) {
+// OTP code generation helper
+const generateOtpCode = () => `${Math.floor(100000 + Math.random() * 900000)}`;
+
+/*
+ * Setup Email 2FA - Send OTP
+ */
+export async function setup2FAEmail(req, res) {
 
     try {
-        const userId = request.user?.id;
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(400).send(createResponse(401, 'UNAUTHORIZED'));
+        const accountId = req.user?.id;
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(400).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const otpCode = `${Math.floor(100000 + Math.random() * 900000)}`
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, 'email');
-        if (!twoFa)
-            await storeOtpCode(this.db, otpCode, userId);
+        const otpCode = generateOtpCode();
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, 'email');
+        if (!mfaRecord)
+            await storeOtpCode(this.db, otpCode, accountId);
         else {
-            if (twoFa.enabled)
-                return reply.code(400).send(createResponse(400, 'TWOFA_ALREADY_ENABLED'));
-            await modifyOtpCode(this.db, otpCode, user.id, twoFa.type);
+            if (mfaRecord.enabled)
+                return res.code(400).send(createResponse(400, 'TWOFA_ALREADY_ENABLED'));
+            await modifyOtpCode(this.db, otpCode, account.id, mfaRecord.type);
         }
 
-        await this.sendMail(otpCode, user.email);
+        await this.sendMail(otpCode, account.email);
 
-        return reply.code(200).send(createResponse(200, 'CODE_SENT'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'CODE_SENT'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function verify2FAEmailSetup(request, reply) {
+/*
+ * Verify Email 2FA Setup
+ */
+export async function verify2FAEmailSetup(req, res) {
 
     try {
 
-        const userId = request.user?.id;
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(400).send(createResponse(401, 'UNAUTHORIZED'));
+        const accountId = req.user?.id;
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(400).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, 'email');
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
-        else if (twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'TWOFA_ALREADY_ENABLED'));
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, 'email');
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
+        else if (mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'TWOFA_ALREADY_ENABLED'));
 
-        const { otpCode } = request.body;
+        const { otpCode } = req.body;
         if (!otpCode)
-            return reply.code(401).send(createResponse(401, 'OTP_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'OTP_REQUIRED'));
 
-        console.log(`otpCode : ${twoFa.otp} | otp_exp : ${twoFa.otp_exp}`);
-        if (twoFa.otp !== otpCode || twoFa.otp_exp < Date.now())
-            return reply.code(401).send(createResponse(401, 'OTP_INVALID'));
+        console.log(`otpCode : ${mfaRecord.otp} | otp_exp : ${mfaRecord.otp_exp}`);
+        if (mfaRecord.otp !== otpCode || mfaRecord.otp_exp < Date.now())
+            return res.code(401).send(createResponse(401, 'OTP_INVALID'));
 
-        await clearOtpCode(this.db, user.id, twoFa.type);
-        await modifyAccountMfa(this.db, user.id, 'email');
-        const hasPrimary = await locatePrimaryMfaByAccountId(this.db, user.id);
+        await clearOtpCode(this.db, account.id, mfaRecord.type);
+        await modifyAccountMfa(this.db, account.id, 'email');
+        const hasPrimary = await locatePrimaryMfaByAccountId(this.db, account.id);
         if (!hasPrimary)
-            await makeMfaPrimaryByAccountIdAndType(this.db, user.id, 'email');
-        return reply.code(200).send(createResponse(200, 'TWOFA_ENABLED', { isPrimary: (hasPrimary ? false : true) }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+            await makeMfaPrimaryByAccountIdAndType(this.db, account.id, 'email');
+        return res.code(200).send(createResponse(200, 'TWOFA_ENABLED', { isPrimary: (hasPrimary ? false : true) }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function verify2FALogin(request, reply) {
+/*
+ * Verify Email 2FA for Login
+ */
+export async function verify2FALogin(req, res) {
 
     try {
 
-        const userId = request.user?.id;
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(400).send(createResponse(401, 'UNAUTHORIZED'));
+        const accountId = req.user?.id;
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(400).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, 'email');
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
-        else if (!twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'TWOFA_NOT_ENABLED'));
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, 'email');
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
+        else if (!mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'TWOFA_NOT_ENABLED'));
 
-        const { otpCode } = request.body;
+        const { otpCode } = req.body;
         if (!otpCode)
-            return reply.code(401).send(createResponse(401, 'OTP_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'OTP_REQUIRED'));
 
-        if (twoFa.otp !== otpCode || twoFa.otp_exp < Date.now())
-            return reply.code(401).send(createResponse(401, 'OTP_INVALID'));
+        if (mfaRecord.otp !== otpCode || mfaRecord.otp_exp < Date.now())
+            return res.code(401).send(createResponse(401, 'OTP_INVALID'));
 
-        await clearOtpCode(this.db, user.id, twoFa.type);
+        await clearOtpCode(this.db, account.id, mfaRecord.type);
 
-        const accessToken = await this.jwt.signAT({ id: userId });
-        const tokenExist = await locateValidTokenByAccountId(this.db, user.id);
+        const accessToken = await this.jwt.signAT({ id: accountId });
+        const existingToken = await locateValidTokenByAccountId(this.db, account.id);
         let refreshToken;
-        if (tokenExist) {
-            refreshToken = tokenExist.token;
+        if (existingToken) {
+            refreshToken = existingToken.token;
         } else {
-            refreshToken = this.jwt.signRT({ id: user.id });
-            await insertToken(this.db, refreshToken, user.id);
+            refreshToken = this.jwt.signRT({ id: account.id });
+            await insertToken(this.db, refreshToken, account.id);
         }
-        clearSessionCookies(reply);
-        setSessionCookies(reply, accessToken, refreshToken);
-        return reply.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        clearSessionCookies(res);
+        setSessionCookies(res, accessToken, refreshToken);
+        return res.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }

@@ -1,3 +1,7 @@
+/*
+ * Chat Service - Main Entry Point
+ * Real-time messaging via WebSocket
+ */
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { initConversationTable } from './database/setupChatStorage.js';
@@ -15,174 +19,187 @@ import {
 } from './database/conversationRepository.js';
 import { createClient } from 'redis';
 
-
+// Load environment configuration
 dotenv.config();
-let db;
+
+// Database connection
+let dbConn;
 
 (async () => {
     try {
-        db = await open({
+        dbConn = await open({
             filename: './messages.db.sqlite',
             driver: sqlite3.Database
         });
         console.log('Database connected.');
-
-        await initConversationTable(db);
-    } catch (error) {
-        console.error('Failed to connect to database or create table:', error);
+        await initConversationTable(dbConn);
+    } catch (err) {
+        console.error('Failed to connect to database or create table:', err);
         process.exit(1);
     }
 })();
 
-let redis;
+// Redis connection
+let redisClient;
 
 (async () => {
     try {
-        redis = await createClient({
+        redisClient = await createClient({
             url: 'redis://redis:6379'
         })
             .on("error", (err) => console.log("Redis Client Error", err))
             .connect();
-        console.log('Redis is connected...', redis);
-    } catch (error) {
-        console.error('Failed to connect redis-server:', error);
+        console.log('Redis is connected...', redisClient);
+    } catch (err) {
+        console.error('Failed to connect redis-server:', err);
         process.exit(1);
     }
 })();
 
-const users = new Map();
+// Connected users map
+const connectedUsers = new Map();
 
-const wss = new WebSocketServer({ port: 3004, maxPayload: 25000000 });
+// WebSocket server configuration
+const wsServer = new WebSocketServer({ port: 3004, maxPayload: 25000000 });
 
-const eventBus = new EventBusClient(process.env.RABBITMQ_CHAT_QUEUE);
+// Event bus for inter-service communication
+const messageBus = new EventBusClient(process.env.RABBITMQ_CHAT_QUEUE);
+await messageBus.connect();
 
-await eventBus.connect();
-
-wss.on('connection', async (ws, request) => {
+// Handle new WebSocket connections
+wsServer.on('connection', async (socket, request) => {
     console.log('WebSocket: Client connected.');
-    ws.isAuthenticated = false;
-    ws.userId = null;
-    await validateToken(ws, request, redis);
-    if (ws.userId) {
-        if (!users.has(ws.userId))
-            users.set(ws.userId, new Set());
-        users.get(ws.userId).add(ws);
-        const messages = await fetchAllEntries(db, ws.userId);
-        if (messages && ws.readyState === WebSocket.OPEN) {
-            for (const message of messages)
-                ws.send(JSON.stringify(message));
+    socket.isAuthenticated = false;
+    socket.userId = null;
+    
+    await validateToken(socket, request, redisClient);
+    
+    if (socket.userId) {
+        if (!connectedUsers.has(socket.userId)) {
+            connectedUsers.set(socket.userId, new Set());
         }
-    }
-    else {
-        ws.close(3000, 'Unauthorized');
+        connectedUsers.get(socket.userId).add(socket);
+        
+        // Send pending messages
+        const pendingMessages = await fetchAllEntries(dbConn, socket.userId);
+        if (pendingMessages && socket.readyState === WebSocket.OPEN) {
+            for (const msg of pendingMessages) {
+                socket.send(JSON.stringify(msg));
+            }
+        }
+    } else {
+        socket.close(3000, 'Unauthorized');
         return;
     }
 
-
-    ws.on('message', async (message) => {
-        if (!ws.isAuthenticated) {
-            ws.close(3000, 'Unauthorized');
+    // Handle incoming messages
+    socket.on('message', async (rawMessage) => {
+        if (!socket.isAuthenticated) {
+            socket.close(3000, 'Unauthorized');
             return;
         }
-        const payload = JSON.parse(message);
-        if (payload.type === 'MESSAGE_SENT') {
-            console.log('WebSocket: payload received: ', payload);
-            const recipient = payload.recipient_id;
-            console.log('WebSocket: recipient: ', recipient);
+        
+        const msgPayload = JSON.parse(rawMessage);
+        
+        if (msgPayload.type === 'MESSAGE_SENT') {
+            console.log('WebSocket: payload received: ', msgPayload);
+            const recipientId = msgPayload.recipient_id;
+            console.log('WebSocket: recipient: ', recipientId);
 
-            const idExist = await redis.sIsMember('userIds', `${recipient}`);
-            console.log('idExist value: ', idExist);
-            if (!idExist)
-                return;
-            if (recipient) {
-                let isBlocked = await redis.sIsMember(`blocker:${ws.userId}`, `${recipient}`)
-                if (!isBlocked)
-                    isBlocked = await redis.sIsMember(`blocker${recipient}`, `${ws.userId}`)
-                if (recipient === payload.sender_id || recipient === ws.userId || isBlocked)
+            const userExists = await redisClient.sIsMember('userIds', `${recipientId}`);
+            console.log('idExist value: ', userExists);
+            
+            if (!userExists) return;
+            
+            if (recipientId) {
+                let isUserBlocked = await redisClient.sIsMember(`blocker:${socket.userId}`, `${recipientId}`);
+                if (!isUserBlocked) {
+                    isUserBlocked = await redisClient.sIsMember(`blocker${recipientId}`, `${socket.userId}`);
+                }
+                
+                if (recipientId === msgPayload.sender_id || recipientId === socket.userId || isUserBlocked) {
                     return;
+                }
 
-                const messageId = await insertChatEntry(db, payload);
+                const newMessageId = await insertChatEntry(dbConn, msgPayload);
+                msgPayload.message_id = newMessageId;
 
-                payload.message_id = messageId;
-
-                eventBus.publishEvent({
+                messageBus.publishEvent({
                     type: 'MESSAGE_RECEIVED',
-                    recipient_id: payload.recipient_id,
-                    sender_id: ws.userId
+                    recipient_id: msgPayload.recipient_id,
+                    sender_id: socket.userId
                 }, 'notifications.message.received');
 
-                const connections = users.get(recipient);
-                if (connections) {
-                    for (const conn of connections) {
-                        if (conn.isAuthenticated && conn.readyState === WebSocket.OPEN)
-                            conn.send(JSON.stringify(payload));
+                const recipientSockets = connectedUsers.get(recipientId);
+                if (recipientSockets) {
+                    for (const conn of recipientSockets) {
+                        if (conn.isAuthenticated && conn.readyState === WebSocket.OPEN) {
+                            conn.send(JSON.stringify(msgPayload));
+                        }
                     }
-                    await setEntryAsReceived(db, messageId);
+                    await setEntryAsReceived(dbConn, newMessageId);
                 }
             }
+        } else if (msgPayload.type === 'MESSAGE_READ') {
+            console.log('WebSocket: payload received: ', msgPayload);
+            if (msgPayload.message_id) {
+                const existingMsg = await fetchEntryById(dbConn, msgPayload.message_id);
+                if (!existingMsg) return;
+                await setEntryAsViewed(dbConn, existingMsg.id);
+            }
         }
-        else if (payload.type === 'MESSAGE_READ') {
-            console.log('WebSocket: payload received: ', payload);
-            if (payload.message_id) {
-                const msg = await fetchEntryById(db, payload.message_id)
-                if (!msg)
-                    return;
-                await setEntryAsViewed(db, msg.id);
-            } else
-                return;
-        }
-        else
-            return;
-    })
-
-    ws.on('error', (error) => {
-        console.error('WebSocket: Client error:', error);
     });
 
-    ws.on('close', () => {
-        console.log('WebSocket: Client disconnected.');
-        if (ws.isAuthenticated && users.has(ws.userId)) {
-            users.get(ws.userId).delete(ws);
-            if (users.get(ws.userId).size === 0)
-                users.delete(ws.userId);
-        }
-    })
+    socket.on('error', (err) => {
+        console.error('WebSocket: Client error:', err);
+    });
 
+    socket.on('close', () => {
+        console.log('WebSocket: Client disconnected.');
+        if (socket.isAuthenticated && connectedUsers.has(socket.userId)) {
+            connectedUsers.get(socket.userId).delete(socket);
+            if (connectedUsers.get(socket.userId).size === 0) {
+                connectedUsers.delete(socket.userId);
+            }
+        }
+    });
 });
 
-
-wss.on('error', (error) => {
-    console.error('WebSocket: Server error:', error);
+wsServer.on('error', (err) => {
+    console.error('WebSocket: Server error:', err);
     process.exit(1);
 });
 
+// Subscribe to user deletion events
+messageBus.subscribeToEvents(async (incomingMsg) => {
+    if (incomingMsg.type === 'DELETE') {
+        const targetUserId = incomingMsg.userId;
 
-eventBus.subscribeToEvents(async (request) => {
-    if (request.type === 'DELETE') {
-        const userId = request.userId;
-
-        const idExist = await redis.sIsMember('userIds', `${userId}`);
-        console.log('idExist value: ', idExist);
-        if (!idExist)
-            return;
-        await removeEntries(db, userId);
-        users.get(userId)?.forEach((ws) => {
-            ws.close(1010, 'Mandatory exit');
+        const userExists = await redisClient.sIsMember('userIds', `${targetUserId}`);
+        console.log('idExist value: ', userExists);
+        
+        if (!userExists) return;
+        
+        await removeEntries(dbConn, targetUserId);
+        connectedUsers.get(targetUserId)?.forEach((socket) => {
+            socket.close(1010, 'Mandatory exit');
         });
     }
-})
+});
 
-const handleShutDown = async (signal) => {
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
     try {
         console.log(`Caught a signal or type ${signal}`);
-        await eventBus.close();
-        await db.close();
-        await redis.close();
+        await messageBus.close();
+        await dbConn.close();
+        await redisClient.close();
         process.exit(0);
-    } catch (error) {
-        console.log(error);
+    } catch (err) {
+        console.log(err);
         process.exit(0);
     }
 }
-process.on('SIGINT', handleShutDown);
-process.on('SIGTERM', handleShutDown);
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

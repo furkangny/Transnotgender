@@ -1,3 +1,7 @@
+/*
+ * Authentication Service - Main Entry Point
+ * Handles user authentication, sessions, and 2FA
+ */
 import fastify from 'fastify';
 import dotenv from 'dotenv';
 import sqlitePlugin from './plugins/sqlite-plugin.js'
@@ -15,76 +19,87 @@ import { initPendingChangeTable } from './database/initPendingChangeTable.js';
 import redisPlugin from './plugins/redis-plugin.js';
 import rateLimit from '@fastify/rate-limit';
 
-const server = fastify({ logger: true });
-
+// Load environment configuration
 dotenv.config();
 
-await server.register(sqlitePlugin);
-await server.register(jwtPlugin, {
+// Initialize Fastify instance with logging
+const app = fastify({ logger: true });
+
+// Register core plugins
+await app.register(sqlitePlugin);
+await app.register(jwtPlugin, {
     accessTokenKey: process.env.AJWT_SECRET_KEY,
     refreshTokenKey: process.env.RJWT_SECRET_KEY,
     tempTokenKey: process.env.TJWT_SECRET_KEY
 });
 
-await initAccountTable(server.db);
-await initTokenTable(server.db);
-await initMfaTable(server.db);
-await initOAuthTable(server.db);
-await initPendingChangeTable(server.db);
+// Initialize database tables
+await initAccountTable(app.db);
+await initTokenTable(app.db);
+await initMfaTable(app.db);
+await initOAuthTable(app.db);
+await initPendingChangeTable(app.db);
 
-await server.register(redisPlugin);
-await server.register(nodemailerPlugin);
-await server.register(rabbitmqPlugin);
-await server.register(rateLimit, {
+// Register additional plugins
+await app.register(redisPlugin);
+await app.register(nodemailerPlugin);
+await app.register(rabbitmqPlugin);
+await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute'
 });
 
-server.rabbit.consumeMessages(async (message) => {
+// Message queue consumer for username updates
+app.rabbit.consumeMessages(async (incomingMessage) => {
     try {
-        const { id, username } = message;
-        if (username)
-            await modifyAccountUsername(server.db, username, id);
+        const { id: accountId, username: newUsername } = incomingMessage;
+        if (newUsername) {
+            await modifyAccountUsername(app.db, newUsername, accountId);
+        }
         console.log('Auth: account updated.');
-    } catch (error) {
-        console.log('Error consuming message in auth-service', error);
+    } catch (err) {
+        console.log('Error consuming message in auth-service', err);
     }
 });
 
-await server.register(sessionEndpoints, { prefix: '/auth' });
-await server.register(mfaEndpoints, { prefix: '/2fa' });
+// Register route handlers
+await app.register(sessionEndpoints, { prefix: '/auth' });
+await app.register(mfaEndpoints, { prefix: '/2fa' });
 console.log("auth service initialization is done...");
 
-const start = async () => {
+// Server bootstrap function
+const bootstrap = async () => {
     try {
-        await server.listen({ host: `${process.env.HOST_NAME}`, port: 3000 });
-        server.log.info("Server is listening on port 3000");
-    }
-    catch (err) {
-        server.log.error(err);
-        await server.redis.close();
-        await server.db.close();
-        await server.rabbit.close();
-        await server.close();
+        const hostName = process.env.HOST_NAME;
+        const portNumber = 3000;
+        await app.listen({ host: hostName, port: portNumber });
+        app.log.info("Server is listening on port 3000");
+    } catch (err) {
+        app.log.error(err);
+        await app.redis.close();
+        await app.db.close();
+        await app.rabbit.close();
+        await app.close();
         process.exit(1);
     }
 };
 
-start();
+bootstrap();
 
-const handleShutDown = async (signal) => {
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
     try {
         console.log(`Caught a signal or type ${signal}`);
-        await server.redis.close();
-        await server.db.close();
-        await server.rabbit.close();
-        await server.close();
+        await app.redis.close();
+        await app.db.close();
+        await app.rabbit.close();
+        await app.close();
         process.exit(0);
-    } catch (error) {
-        console.log(error);
+    } catch (err) {
+        console.log(err);
         process.exit(0);
     }
 }
 
-process.on('SIGINT', handleShutDown);
-process.on('SIGTERM', handleShutDown);
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

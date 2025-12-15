@@ -1,34 +1,37 @@
+/*
+ * Token Repository - Database Operations
+ * JWT refresh token management
+ */
 
-export async function locateTokenById(db, id) {
-    return await db.get('SELECT * FROM token WHERE id = ?',
-        [id]
-    );
+// SQL Queries
+const QUERIES = {
+    FIND_BY_ID: 'SELECT * FROM token WHERE id = ?',
+    FIND_BY_TOKEN: 'SELECT * FROM token WHERE token = ?',
+    INSERT: "INSERT INTO token (token, expires_at, user_id) VALUES (?, DATETIME('now', '+7 days'), ?)",
+    REVOKE: 'UPDATE token SET revoked = 1 where token = ?',
+    FIND_VALID_BY_USER: "SELECT * FROM token WHERE user_id = ? AND revoked = 0 AND expires_at > DATETIME('now')"
+};
+
+export async function locateTokenById(dbConn, tokenId) {
+    return await dbConn.get(QUERIES.FIND_BY_ID, [tokenId]);
 }
 
-export async function locateToken(db, token) {
-    return await db.get('SELECT * FROM token WHERE token = ?',
-        [token]
-    );
+export async function locateToken(dbConn, tokenValue) {
+    return await dbConn.get(QUERIES.FIND_BY_TOKEN, [tokenValue]);
 }
 
-export async function insertToken(db, token, userId) {
-    const result = await db.run('INSERT INTO token (token, expires_at, user_id) VALUES (?, DATETIME(\'now\', \'+7 days\'), ?)',
-        [token, userId]
-    );
+export async function insertToken(dbConn, tokenValue, accountId) {
+    const result = await dbConn.run(QUERIES.INSERT, [tokenValue, accountId]);
     console.log("Token inserted with ID:", result.lastID);
     return result.lastID;
 }
 
-export async function invalidateToken(db, token) {
-    const result = await db.run('UPDATE token SET revoked = 1 where token = ?',
-        [token]
-    );
+export async function invalidateToken(dbConn, tokenValue) {
+    const result = await dbConn.run(QUERIES.REVOKE, [tokenValue]);
     console.log("Token invalidated with ID:", result.lastID);
     return result.lastID;
 }
 
-export async function locateValidTokenByAccountId(db, uid) {
-    return await db.get('SELECT * FROM token WHERE user_id = ? AND revoked = 0 AND expires_at > DATETIME(\'now\')',
-        [uid]
-    );
+export async function locateValidTokenByAccountId(dbConn, accountId) {
+    return await dbConn.get(QUERIES.FIND_VALID_BY_USER, [accountId]);
 }

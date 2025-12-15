@@ -1,48 +1,51 @@
+/*
+ * Dashboard Helpers
+ * Utility functions for dashboard service
+ */
 import WebSocket from 'ws';
 
-async function retrievePlayerData(redis, rabbit, socket) {
-    let players = [];
-    let finalPlayers = [];
+async function retrievePlayerData(redisClient, mqClient, wsSocket) {
+    let playerList = [];
+    let sortedPlayers = [];
 
-    const playersIds = await redis.sMembers('userIds');
-    console.log("PLAYER_IDS: ", playersIds);
-    const idKeys = playersIds.map(id => `player:${id}`);
+    const playerIds = await redisClient.sMembers('userIds');
+    console.log("PLAYER_IDS: ", playerIds);
+    const idKeys = playerIds.map(id => `player:${id}`);
     if (idKeys && idKeys[0]) {
-        players = await redis.sendCommand([
+        playerList = await redisClient.sendCommand([
             'JSON.MGET',
             ...idKeys,
             '$'
-        ])
-        console.log("HAHOMA PLAYERS: ", players);
-        finalPlayers = await Promise.all(players
+        ]);
+        console.log("HAHOMA PLAYERS: ", playerList);
+        sortedPlayers = await Promise.all(playerList
             .map(jsonPlayer => {
-                const player = JSON.parse(jsonPlayer);
-                if (player && player[0])
-                    return player[0];
-
+                const playerData = JSON.parse(jsonPlayer);
+                if (playerData && playerData[0])
+                    return playerData[0];
             })
         );
 
-        finalPlayers.sort(rankPlayers);
-        console.log("Players from dashboard-service", finalPlayers);
+        sortedPlayers.sort(rankPlayers);
+        console.log("Players from dashboard-service", sortedPlayers);
 
-        finalPlayers.forEach((player, rank) => {
-            if (player.rank !== rank + 1) {
-                rabbit.produceMessage({
+        sortedPlayers.forEach((playerData, rank) => {
+            if (playerData.rank !== rank + 1) {
+                mqClient.produceMessage({
                     type: 'UPDATE_RANK',
-                    userId: player.userId,
+                    userId: playerData.userId,
                     rank: rank + 1
-                }, 'profile.rank.update')
-                player.rank = rank + 1;
+                }, 'profile.rank.update');
+                playerData.rank = rank + 1;
             }
         });
     }
-    return finalPlayers;
+    return sortedPlayers;
 }
 
 function rankPlayers(player1, player2) {
     if (player1.level !== player2.level)
-        return player2.level - player1.level
+        return player2.level - player1.level;
 
     if (player1.xp !== player2.xp)
         return player2.xp - player1.xp;
@@ -56,11 +59,10 @@ function rankPlayers(player1, player2) {
     return (1);
 }
 
-export async function showDashboard(redis, socket, rabbit) {
-
-    if (socket.isAuthenticated && socket.readyState === WebSocket.OPEN) {
-        const players = await retrievePlayerData(redis, rabbit, socket);
-        if (players)
-            socket.send(JSON.stringify(players));
+export async function showDashboard(redisClient, wsSocket, mqClient) {
+    if (wsSocket.isAuthenticated && wsSocket.readyState === WebSocket.OPEN) {
+        const playerList = await retrievePlayerData(redisClient, mqClient, wsSocket);
+        if (playerList)
+            wsSocket.send(JSON.stringify(playerList));
     }
 }  	

@@ -1,111 +1,131 @@
-
+/*
+ * Game Service - Main Entry Point
+ * Handles real-time game sessions via WebSocket
+ */
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
-// import cors from "@fastify/cors";
 import redisPlugin from "./tools/redis.js";
 import { validateToken, verifyWSToken } from "./tools/tokenGuard.js";
 import sqlitePlugin, { createGamesTable } from "./tools/sqlite-plugin.js";
-import { pollForNewMatches } from "./routes/matchActivity.js"; // Import the polling function
-const fastify = Fastify();
+import { pollForNewMatches } from "./routes/matchActivity.js";
 
-await fastify.register(redisPlugin);
-await fastify.register(sqlitePlugin);
-await createGamesTable(fastify.db);
+// Initialize Fastify app
+const app = Fastify();
+
+// Register plugins
+await app.register(redisPlugin);
+await app.register(sqlitePlugin);
+await createGamesTable(app.db);
+
+// Poll for new matches every 2 seconds
+const POLL_INTERVAL_MS = 2000;
 setInterval(() => {
-  pollForNewMatches(fastify.db);
-}, 2000);
-fastify.register(websocket);
+  pollForNewMatches(app.db);
+}, POLL_INTERVAL_MS);
 
+app.register(websocket);
 
-// local games
+// Local games WebSocket route
 import { localMatch } from "./routes/localMatch.js";
-fastify.register(async function (fastify) {
+app.register(async function (fastify) {
   fastify.get("/game/ws", { websocket: true }, (connection, req) => {
-    localMatch(connection)
+    localMatch(connection);
   });
 });
 
-// remote games route
+// Remote games WebSocket route
 import { remoteMatch } from "./routes/remoteMatch.js";
-// ...existing code...
-fastify.register(async function (fastify) {
+app.register(async function (fastify) {
   fastify.get("/game/remoteGame", { websocket: true }, async (socket, req) => {
     try {
       console.log("WebSocket connection attempt - verifying token...");
 
-      socket.userId = null; // Initialize userId
-      socket.isAuthenticated = false; // Initialize authentication status
-      // Verify the token first
+      socket.userId = null;
+      socket.isAuthenticated = false;
+      
+      // Verify token before proceeding
       await verifyWSToken(socket, req, fastify.redis);
 
-      // Check if the socket is still open after verification
+      // Check if socket is still open after verification
       if (socket.readyState !== socket.OPEN) {
         console.log("Socket closed during verification");
         return;
       }
-      console.log("enterig remote games");
+      
+      console.log("entering remote games");
       remoteMatch(socket, req);
 
-    } catch (error) {
-      console.error("Error in WebSocket route:", error);
+    } catch (err) {
+      console.error("Error in WebSocket route:", err);
       if (socket.readyState === socket.OPEN) {
         socket.close(3000, 'Authentication failed');
       }
     }
   });
 });
-// ...existing code...
-// route to store the game stats
+
+// Store game stats route
 import saveMatchStats from "./routes/saveMatchStats.js";
-fastify.register(async function name(fastify) {
+app.register(async function (fastify) {
   fastify.post("/game/storePlayerData", { preHandler: [validateToken] }, async (req, reply) => {
     await saveMatchStats(req, reply, fastify.db);
   });
 });
 
+// Send game invite route
 import sendInvite from './routes/sendInvite.js';
-fastify.register(async function name(fastify) {
+app.register(async function (fastify) {
   fastify.post("/game/invite", { preHandler: [validateToken] }, async (req, reply) => {
     return sendInvite(req, reply, fastify);
   });
 });
 
+// Accept game invite route
 import acceptInvite from "./routes/acceptInvite.js";
-fastify.register(async function name(fastify) {
+app.register(async function (fastify) {
   fastify.post("/game/accept", { preHandler: [validateToken] }, async (req, reply) => {
     return acceptInvite(req, reply, fastify);
   });
 });
 
+// Fetch room ID route
 import fetchRoomId from "./routes/fetchRoomId.js";
-fastify.register(async function name(req, reply) {
+app.register(async function (fastify) {
   fastify.post("/game/getRoomId", { preHandler: [validateToken] }, async (req, reply) => {
     return fetchRoomId(req, reply, fastify);
   });
 });
 
+// Fetch user history route
 import fetchUserHistory from "./routes/fetchUserHistory.js";
-fastify.register(async function name(fastify) {
+app.register(async function (fastify) {
   fastify.post("/game/user-history", { preHandler: [validateToken] }, async (req, reply) => {
     return fetchUserHistory(req, reply, fastify.db);
   });
 });
 
+// Match activity WebSocket route
 import matchActivity from "./routes/matchActivity.js";
-fastify.register(async function (fastify) {
+app.register(async function (fastify) {
   fastify.get("/game/recent-activity", { websocket: true }, (connection, req) => {
     matchActivity(connection, req, fastify.db);
   });
 });
+
+// Rematch route
 import rematch from "./routes/rematch.js";
-fastify.register(async function (fastify) {
+app.register(async function (fastify) {
   fastify.post("/game/restart-match", { preHandler: [validateToken] }, async (req, reply) => {
     return rematch(req, reply);
   });
 });
-fastify.listen({ port: 5000, host: '0.0.0.0' }, (err) => {
+
+// Start server
+const SERVER_PORT = 5000;
+app.listen({ port: SERVER_PORT, host: '0.0.0.0' }, (err) => {
   if (err) {
     console.error(err);
     process.exit(1);
   }
+  console.log(`Game service listening on port ${SERVER_PORT}`);
 });

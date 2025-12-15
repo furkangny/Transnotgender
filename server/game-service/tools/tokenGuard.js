@@ -1,59 +1,62 @@
+/*
+ * Token Guard Middleware
+ * Validates JWT tokens for HTTP and WebSocket connections
+ */
 import jwt from 'jsonwebtoken';
 import { createResponse } from './helpers.js';
 import { parse } from 'cookie';
 
 
-export function getSessionCookies(request) {
-    const authCookies = request.headers.cookie || '';
-    const cookies = parse(authCookies);
-    if (!cookies || !cookies.accessToken || !cookies.refreshToken)
+export function getSessionCookies(req) {
+    const authCookies = req.headers.cookie || '';
+    const parsedCookies = parse(authCookies);
+    if (!parsedCookies || !parsedCookies.accessToken || !parsedCookies.refreshToken)
         return null;
 
     return {
-        accessToken: cookies.accessToken,
-        refreshToken: cookies.refreshToken
+        accessToken: parsedCookies.accessToken,
+        refreshToken: parsedCookies.refreshToken
     };
 }
 
 
-export async function validateToken(request, reply) {
+export async function validateToken(req, res) {
     try {
-        let cookie = getSessionCookies(request);
-        if (!cookie)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        let sessionCookie = getSessionCookies(req);
+        if (!sessionCookie)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const payload = jwt.verify(cookie.accessToken, process.env.AJWT_SECRET_KEY);
-        const idExist = await this.redis.sIsMember('userIds', `${payload.id}`);
-        // console.log('idExist value: ', idExist);
-        if (!idExist)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
-        request.user = payload;
-    } catch (error) {
-        if (error.name === 'TokenExpiredError')
-            return reply.code(401).send(createResponse(401, 'ACCESS_TOKEN_EXPIRED'))
-        return reply.code(401).send(createResponse(401, 'ACCESS_TOKEN_INVALID'));
+        const tokenPayload = jwt.verify(sessionCookie.accessToken, process.env.AJWT_SECRET_KEY);
+        const userExists = await this.redis.sIsMember('userIds', `${tokenPayload.id}`);
+        if (!userExists)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        req.user = tokenPayload;
+    } catch (err) {
+        if (err.name === 'TokenExpiredError')
+            return res.code(401).send(createResponse(401, 'ACCESS_TOKEN_EXPIRED'));
+        return res.code(401).send(createResponse(401, 'ACCESS_TOKEN_INVALID'));
     }
 }
 
-export async function verifyWSToken(socket, request, redis) {
+export async function verifyWSToken(wsSocket, req, redisClient) {
     try {
-        let cookie = getSessionCookies(request);
-        if (!cookie) {
-            socket.close(3000, 'Unauthorized');
+        let sessionCookie = getSessionCookies(req);
+        if (!sessionCookie) {
+            wsSocket.close(3000, 'Unauthorized');
             return;
         }
-        const payload = jwt.verify(cookie.accessToken, process.env.AJWT_SECRET_KEY);
+        const tokenPayload = jwt.verify(sessionCookie.accessToken, process.env.AJWT_SECRET_KEY);
 
-        const idExist = await redis.sIsMember('userIds', `${payload.id}`);
-        if (!idExist) {
-            socket.close(3000, 'Unauthorized');
+        const userExists = await redisClient.sIsMember('userIds', `${tokenPayload.id}`);
+        if (!userExists) {
+            wsSocket.close(3000, 'Unauthorized');
             return;
         }
 
-        socket.userId = payload.id;
-        socket.isAuthenticated = true;
-    } catch (error) {
-        console.log('WebSocket: ', error);
-        socket.close(1008, 'Token invalid');
+        wsSocket.userId = tokenPayload.id;
+        wsSocket.isAuthenticated = true;
+    } catch (err) {
+        console.log('WebSocket: ', err);
+        wsSocket.close(1008, 'Token invalid');
     }
 }

@@ -1,25 +1,30 @@
-const fetchRoomId = async (req, reply, fastify) => {
-    const { userId } = req.body;
-    const redis = fastify.redis; // Access the Redis client from Fastify instance
+/*
+ * Fetch Room ID Route
+ * Retrieves game room ID from Redis
+ */
 
-    if (!redis) {
+const fetchRoomId = async (req, res, fastify) => {
+    const { userId } = req.body;
+    const redisClient = fastify.redis;
+
+    if (!redisClient) {
         console.error("Redis client is not available");
-        return reply.code(500).send({ error: "Redis client is not available" });
+        return res.code(500).send({ error: "Redis client is not available" });
     }
 
     if (!userId) {
-        return reply.code(400).send({ error: "Missing fields" });
+        return res.code(400).send({ error: "Missing fields" });
     }
 
     try {
-        const roomData = await redis.get(`invite:${userId}`);
+        const roomData = await redisClient.get(`invite:${userId}`);
         if (!roomData) {
-            return reply.code(404).send({ error: "Room not found" });
+            return res.code(404).send({ error: "Room not found" });
         }
-        return reply.code(200).send({ message: "Room found", roomData: roomData });
-    } catch (error) {
-        console.error("Error retrieving room data:", error);
-        return reply.code(500).send({ error: "Internal server error" });
+        return res.code(200).send({ message: "Room found", roomData: roomData });
+    } catch (err) {
+        console.error("Error retrieving room data:", err);
+        return res.code(500).send({ error: "Internal server error" });
     }
-}
+};
 export default fetchRoomId;

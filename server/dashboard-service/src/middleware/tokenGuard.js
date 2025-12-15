@@ -1,40 +1,44 @@
+/*
+ * Token Guard Middleware
+ * Validates JWT tokens for WebSocket connections
+ */
 import jwt from 'jsonwebtoken';
 import { parse } from 'cookie'
 
-export function getSessionCookies(request) {
-    const authCookies = request.headers.cookie || '';
-    const cookies = parse(authCookies);
-    if (!cookies || !cookies.accessToken || !cookies.refreshToken)
+export function getSessionCookies(req) {
+    const authCookies = req.headers.cookie || '';
+    const parsedCookies = parse(authCookies);
+    if (!parsedCookies || !parsedCookies.accessToken || !parsedCookies.refreshToken)
         return null;
     return {
-        accessToken: cookies.accessToken,
-        refreshToken: cookies.refreshToken
+        accessToken: parsedCookies.accessToken,
+        refreshToken: parsedCookies.refreshToken
     };
 }
 
 
-export async function validateToken(socket, request, redis) {
+export async function validateToken(wsSocket, req, redisClient) {
     try {
-        let cookie = getSessionCookies(request);
-        if (!cookie) {
-            socket.close(3000, 'Unauthorized');
+        let sessionCookie = getSessionCookies(req);
+        if (!sessionCookie) {
+            wsSocket.close(3000, 'Unauthorized');
             return;
         }
 
-        const payload = jwt.verify(cookie.accessToken, process.env.AJWT_SECRET_KEY);
+        const tokenPayload = jwt.verify(sessionCookie.accessToken, process.env.AJWT_SECRET_KEY);
 
-        const idExist = await redis.sIsMember('userIds', `${payload.id}`);
-        console.log('idExist value: ', idExist);
-        if (!idExist) {
-            socket.close(3000, 'Unauthorized');
+        const userExists = await redisClient.sIsMember('userIds', `${tokenPayload.id}`);
+        console.log('userExists value: ', userExists);
+        if (!userExists) {
+            wsSocket.close(3000, 'Unauthorized');
             return;
         }
 
-        socket.userId = payload.id;
-        socket.isAuthenticated = true;
-        console.log(`WebSocket: User ${socket.userId} authenticated`);
-    } catch (error) {
-        console.log('WebSocket: ', error);
-        socket.close(1008, 'Token invalid');
+        wsSocket.userId = tokenPayload.id;
+        wsSocket.isAuthenticated = true;
+        console.log(`WebSocket: User ${wsSocket.userId} authenticated`);
+    } catch (err) {
+        console.log('WebSocket: ', err);
+        wsSocket.close(1008, 'Token invalid');
     }
 }

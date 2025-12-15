@@ -1,16 +1,19 @@
+/*
+ * RabbitMQ Plugin
+ * Message queue connection for relationships service
+ */
 import fp from 'fastify-plugin'
 import RabbitMQClient from '../libs/RabbitMQClient.js'
 
-
-async function rabbitMQPlugin(fastify, options) {
-    const rabbit = new RabbitMQClient(process.env.RABBITMQ_FRIENDS_QUEUE);
+async function rabbitMQPlugin(fastify, opts) {
+    const mqClient = new RabbitMQClient(process.env.RABBITMQ_FRIENDS_QUEUE);
     try {       
-        await rabbit.connect();
+        await mqClient.connect();
         console.log("RabbitMQ connected...");
-        fastify.decorate('rabbit', rabbit);    
-    } catch (error) {
+        fastify.decorate('rabbit', mqClient);    
+    } catch (err) {
         console.log("Failed to connect to RabbitMQ");
-        throw new Error(error);
+        throw new Error(err);
     }
 }
 

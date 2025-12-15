@@ -1,36 +1,39 @@
+/*
+ * Dashboard Manager Controller
+ * Handles live dashboard WebSocket connections
+ */
 import { validateToken } from "../middleware/tokenGuard.js";
 import { showDashboard } from "../utils/helpers.js";
 
+const activeUsers = new Map();
 
-const users = new Map();
-
-export async function fetchLiveDashboard(socket, request) {
+export async function fetchLiveDashboard(wsSocket, req) {
     try {
-        socket.userId = null;
-        socket.isAuthenticated = false;
-        await validateToken(socket, request, this.redis);
-        if (socket.userId) {
-            if (!users.has(socket.userId))
-                users.set(socket.userId, new Set());
-            users.get(socket.userId).add(socket);
-            showDashboard(this.redis, socket, this.rabbit);
+        wsSocket.userId = null;
+        wsSocket.isAuthenticated = false;
+        await validateToken(wsSocket, req, this.redis);
+        if (wsSocket.userId) {
+            if (!activeUsers.has(wsSocket.userId))
+                activeUsers.set(wsSocket.userId, new Set());
+            activeUsers.get(wsSocket.userId).add(wsSocket);
+            showDashboard(this.redis, wsSocket, this.rabbit);
         }
         else {
-            socket.close(3000, 'Unauthorized');
+            wsSocket.close(3000, 'Unauthorized');
             return;
         }
 
-        setInterval(showDashboard, 5000, this.redis, socket, this.rabbit);
+        setInterval(showDashboard, 5000, this.redis, wsSocket, this.rabbit);
 
-        socket.on('error', (error) => {
-            console.error('FastifyWebSocket: Client error:', error);
+        wsSocket.on('error', (err) => {
+            console.error('FastifyWebSocket: Client error:', err);
         });
 
-        socket.on('close', () => {
+        wsSocket.on('close', () => {
             console.log('FastifyWebSocket: Client disconnected.');
-        })
-    } catch (error) {
-        console.log(error);
-        socket.close(1008, 'Malformed payload');
+        });
+    } catch (err) {
+        console.log(err);
+        wsSocket.close(1008, 'Malformed payload');
     }
 }

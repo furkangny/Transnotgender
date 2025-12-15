@@ -1,17 +1,27 @@
-export async function fetchPendingChangeByAccountId(db, id) {
-    return await db.get('SELECT new_email, new_password FROM pending_credentials WHERE user_id = ?', [id]);
-}
+/*
+ * Pending Credentials Repository
+ * Stores temporary credential changes awaiting verification
+ */
 
-export async function insertPendingChange(db, id, email, password) {
-    await db.run(
-        `INSERT INTO pending_credentials (user_id, new_email, new_password) 
+// SQL Queries
+const QUERIES = {
+    FIND_BY_USER: 'SELECT new_email, new_password FROM pending_credentials WHERE user_id = ?',
+    UPSERT: `INSERT INTO pending_credentials (user_id, new_email, new_password) 
         VALUES (?, ?, ?)
         ON CONFLICT (user_id) DO UPDATE SET 
             new_email = excluded.new_email,
-            new_password = excluded.new_password;
-        `, [id, email, password]);
+            new_password = excluded.new_password;`,
+    DELETE: 'DELETE FROM pending_credentials WHERE user_id = ?'
+};
+
+export async function fetchPendingChangeByAccountId(dbConn, accountId) {
+    return await dbConn.get(QUERIES.FIND_BY_USER, [accountId]);
 }
 
-export async function removePendingChange(db, id) {
-    await db.run('DELETE FROM pending_credentials WHERE user_id = ?', [id]);
+export async function insertPendingChange(dbConn, accountId, newEmail, newPassword) {
+    await dbConn.run(QUERIES.UPSERT, [accountId, newEmail, newPassword]);
+}
+
+export async function removePendingChange(dbConn, accountId) {
+    await dbConn.run(QUERIES.DELETE, [accountId]);
 }

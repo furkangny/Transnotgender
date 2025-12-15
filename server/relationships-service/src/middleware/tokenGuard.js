@@ -1,34 +1,38 @@
+/*
+ * Token Guard Middleware
+ * Validates JWT tokens from cookies
+ */
 import jwt from 'jsonwebtoken';
 import { createResponse } from '../utils/helpers.js';
 import { parse } from 'cookie'
 
-export function getSessionCookies(request) {
-    const authCookies = request.headers.cookie || '';
-    const cookies = parse(authCookies);
-    if (!cookies || !cookies.accessToken || !cookies.refreshToken)
+export function getSessionCookies(req) {
+    const authCookies = req.headers.cookie || '';
+    const parsedCookies = parse(authCookies);
+    if (!parsedCookies || !parsedCookies.accessToken || !parsedCookies.refreshToken)
         return null;
     return {
-        accessToken: cookies.accessToken,
-        refreshToken: cookies.refreshToken
+        accessToken: parsedCookies.accessToken,
+        refreshToken: parsedCookies.refreshToken
     };
 }
 
 
-export async function validateToken(request, reply) {
+export async function validateToken(req, res) {
     try {
-        let cookie = getSessionCookies(request);
-        if (!cookie)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        let sessionCookie = getSessionCookies(req);
+        if (!sessionCookie)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const payload = jwt.verify(cookie.accessToken, process.env.AJWT_SECRET_KEY);
-        const idExist = await this.redis.sIsMember('userIds', `${payload.id}`);
-        console.log('idExist value: ', idExist);
-        if (!idExist)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
-        request.user = payload;
-    } catch (error) {
-        if (error.name === 'TokenExpiredError')
-            return reply.code(401).send(createResponse(401, 'ACCESS_TOKEN_EXPIRED'))
-        return reply.code(401).send(createResponse(401, 'ACCESS_TOKEN_INVALID'));
+        const tokenPayload = jwt.verify(sessionCookie.accessToken, process.env.AJWT_SECRET_KEY);
+        const userExists = await this.redis.sIsMember('userIds', `${tokenPayload.id}`);
+        console.log('userExists value: ', userExists);
+        if (!userExists)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        req.user = tokenPayload;
+    } catch (err) {
+        if (err.name === 'TokenExpiredError')
+            return res.code(401).send(createResponse(401, 'ACCESS_TOKEN_EXPIRED'));
+        return res.code(401).send(createResponse(401, 'ACCESS_TOKEN_INVALID'));
     }
 }

@@ -1,17 +1,21 @@
+/*
+ * Event Bus Client
+ * RabbitMQ client for dashboard service
+ */
 import amqp from 'amqplib'
 
-const MAX_RECONN_ATTEMPTS = 10;
-const RECONN_DELAY = 1000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_MS = 1000;
 
 class EventBusClient {
-    constructor(queue, url = process.env.RABBITMQ_URL, exchange = 'microservices-exchange', exchangeType = 'topic') {
-        this.url = url;
-        this.queueName = queue;
-        this.channel = null;
-        this.exchange = exchange;
+    constructor(queueName, connectionUrl = process.env.RABBITMQ_URL, exchangeName = 'microservices-exchange', exchangeType = 'topic') {
+        this.connectionUrl = connectionUrl;
+        this.queueName = queueName;
+        this.msgChannel = null;
+        this.exchangeName = exchangeName;
         this.exchangeType = exchangeType;
-        this.connection = null;
-        this.reconnectAttempts = 0;
+        this.activeConnection = null;
+        this.reconnectCount = 0;
         this.isConnecting = false;
     }
 
@@ -21,94 +25,94 @@ class EventBusClient {
 
         this.isConnecting = true;
         try {
-            this.connection = await amqp.connect(this.url);
-            this.connection.on('error', (error) => console.log('EventBusClient connection error: ', error))
-            this.connection.on('close', () => this.#attemptReconnect())
+            this.activeConnection = await amqp.connect(this.connectionUrl);
+            this.activeConnection.on('error', (err) => console.log('EventBusClient connection error: ', err));
+            this.activeConnection.on('close', () => this.#attemptReconnect());
 
-            this.channel = await this.connection.createChannel();
-            this.channel.on('error', async (error) => { console.log('EventBusClient channel error: ', error); });
-            await this.channel.assertExchange(this.exchange, this.exchangeType, { durable: true });
-            await this.channel.assertQueue(this.queueName, { durable: true });
-            await this.channel.bindQueue(this.queueName, this.exchange, 'dashboard.#');
+            this.msgChannel = await this.activeConnection.createChannel();
+            this.msgChannel.on('error', async (err) => { console.log('EventBusClient channel error: ', err); });
+            await this.msgChannel.assertExchange(this.exchangeName, this.exchangeType, { durable: true });
+            await this.msgChannel.assertQueue(this.queueName, { durable: true });
+            await this.msgChannel.bindQueue(this.queueName, this.exchangeName, 'dashboard.#');
 
             this.isConnecting = false;
-            this.reconnectAttempts = 0;
-        } catch (error) {
-            console.log('Failed to connect to EventBusClient: ', error);
+            this.reconnectCount = 0;
+        } catch (err) {
+            console.log('Failed to connect to EventBusClient: ', err);
             this.isConnecting = false;
             await this.#attemptReconnect();
-            throw new Error(error);
+            throw new Error(err);
         }
     }
 
 
     async #attemptReconnect() {
-        this.channel = null;
-        this.connection = null;
-        if (this.reconnectAttempts >= MAX_RECONN_ATTEMPTS) {
+        this.msgChannel = null;
+        this.activeConnection = null;
+        if (this.reconnectCount >= MAX_RECONNECT_ATTEMPTS) {
             console.log('Reached max reconnection attempts');
             return;
         }
-        this.reconnectAttempts++;
-        const delay = this.reconnectAttempts * RECONN_DELAY;
-        console.log(`Reconnecting in ${delay / 1000}s, attempt ${this.reconnectAttempts}...`)
+        this.reconnectCount++;
+        const delayMs = this.reconnectCount * RECONNECT_DELAY_MS;
+        console.log(`Reconnecting in ${delayMs / 1000}s, attempt ${this.reconnectCount}...`);
         setTimeout(async () => {
             await this.connect();
-        }, delay);
+        }, delayMs);
     }
 
-    async produceMessage(message, routingKey) {
+    async produceMessage(msgPayload, routingKey) {
         try {
 
-            if (!this.channel)
+            if (!this.msgChannel)
                 await this.connect();
 
-            this.channel.publish(
-                this.exchange,
+            this.msgChannel.publish(
+                this.exchangeName,
                 routingKey,
-                Buffer.from(JSON.stringify(message)),
+                Buffer.from(JSON.stringify(msgPayload)),
                 { persistent: true }
             );
 
-        } catch (error) {
-            console.log('Error producing messages.', error);
-            throw new Error(error);
+        } catch (err) {
+            console.log('Error producing messages.', err);
+            throw new Error(err);
         }
     }
 
-    async consumeMessages(handleMessage) {
+    async consumeMessages(messageHandler) {
         try {
-            if (!this.channel)
+            if (!this.msgChannel)
                 await this.connect();
 
-            await this.channel.assertQueue(this.queueName, { durable: true });
-            this.channel.prefetch(1);
-            this.channel.consume(this.queueName, async (msg) => {
+            await this.msgChannel.assertQueue(this.queueName, { durable: true });
+            this.msgChannel.prefetch(1);
+            this.msgChannel.consume(this.queueName, async (msg) => {
                 if (msg !== null) {
                     try {
-                        const payload = JSON.parse(msg.content.toString())
-                        handleMessage(payload)
-                        this.channel.ack(msg);
-                    } catch (error) {
-                        console.log('Error handling message: ', error);
-                        this.channel.nack(msg, false, false);
+                        const parsedPayload = JSON.parse(msg.content.toString());
+                        messageHandler(parsedPayload);
+                        this.msgChannel.ack(msg);
+                    } catch (err) {
+                        console.log('Error handling message: ', err);
+                        this.msgChannel.nack(msg, false, false);
                     }
                 }
-            })
-        } catch (error) {
+            });
+        } catch (err) {
             console.log('Error consuming messages.');
-            throw new Error(error);
+            throw new Error(err);
         }
     }
 
     async close() {
-        if (this.channel) {
-            await this.channel.close();
-            this.channel = null;
+        if (this.msgChannel) {
+            await this.msgChannel.close();
+            this.msgChannel = null;
         }
-        if (this.connection) {
-            await this.connection.close();
-            this.connection = null;
+        if (this.activeConnection) {
+            await this.activeConnection.close();
+            this.activeConnection = null;
         }
     }
 }

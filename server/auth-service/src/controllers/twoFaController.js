@@ -1,3 +1,8 @@
+/*
+ * Two-Factor Authentication Controller
+ * Manages 2FA methods settings
+ */
+
 import {
     disableMfaByAccountIdAndType,
     enableMfaByAccountIdAndType,
@@ -9,103 +14,115 @@ import {
 import { locateAccountById } from "../models/accountRepository.js";
 import { createResponse } from "../utils/helpers.js";
 
-export async function getTwoFaHandler(request, reply) {
+/*
+ * Get All 2FA Methods
+ */
+export async function getTwoFaHandler(req, res) {
 
     try {
-        const userId = request.user?.id;
+        const accountId = req.user?.id;
 
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const methods = await fetchVerifiedMfaMethodsByAccountId(this.db, user.id);
+        const methods = await fetchVerifiedMfaMethodsByAccountId(this.db, account.id);
         if (!methods)
-            return reply.code(404).send(createResponse(404, 'NO_METHODS_FOUND'));
-        return reply.code(200).send(createResponse(200, 'METHODS_FETCHED', { methods }));
-    } catch (error) {
-        console.log('Error: ', error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+            return res.code(404).send(createResponse(404, 'NO_METHODS_FOUND'));
+        return res.code(200).send(createResponse(200, 'METHODS_FETCHED', { methods }));
+    } catch (err) {
+        console.log('Error: ', err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function disableTwoFa(request, reply) {
+/*
+ * Disable 2FA Method
+ */
+export async function disableTwoFa(req, res) {
 
     try {
-        const userId = request.user?.id;
+        const accountId = req.user?.id;
 
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const { method } = request.body;
+        const { method } = req.body;
         console.log('Method to be disabled: ', method);
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, method);
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, method);
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
         else {
-            const otherTwoFa = await locateMfaByAccountIdAndNotType(this.db, user.id, method);
-            if (otherTwoFa && otherTwoFa.enabled)
-                await makeMfaPrimaryByAccountIdAndType(this.db, user.id, otherTwoFa.type);
+            const otherMfaRecord = await locateMfaByAccountIdAndNotType(this.db, account.id, method);
+            if (otherMfaRecord && otherMfaRecord.enabled)
+                await makeMfaPrimaryByAccountIdAndType(this.db, account.id, otherMfaRecord.type);
         }
-        console.log('TwoFa: ', twoFa);
-        if (!twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'METHOD_ALREADY_DISABLED'));
-        await disableMfaByAccountIdAndType(this.db, user.id, method);
-        return reply.code(200).send(createResponse(200, 'METHOD_DISABLED'));
-    } catch (error) {
-        console.log('Error: ', error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        console.log('MfaRecord: ', mfaRecord);
+        if (!mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'METHOD_ALREADY_DISABLED'));
+        await disableMfaByAccountIdAndType(this.db, account.id, method);
+        return res.code(200).send(createResponse(200, 'METHOD_DISABLED'));
+    } catch (err) {
+        console.log('Error: ', err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function enableTwoFa(request, reply) {
+/*
+ * Enable 2FA Method
+ */
+export async function enableTwoFa(req, res) {
 
     try {
-        const userId = request.user?.id;
+        const accountId = req.user?.id;
 
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const { method } = request.body;
+        const { method } = req.body;
         console.log('Method to be enabled: ', method);
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, method);
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
-        console.log('TwoFa: ', twoFa);
-        if (twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'METHOD_ALREADY_ENABLED'));
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, method);
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
+        console.log('MfaRecord: ', mfaRecord);
+        if (mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'METHOD_ALREADY_ENABLED'));
 
-        await enableMfaByAccountIdAndType(this.db, user.id, method);
-        return reply.code(200).send(createResponse(200, 'METHOD_ENABLED'));
-    } catch (error) {
-        console.log('Error: ', error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        await enableMfaByAccountIdAndType(this.db, account.id, method);
+        return res.code(200).send(createResponse(200, 'METHOD_ENABLED'));
+    } catch (err) {
+        console.log('Error: ', err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function makePrimaryHandler(request, reply) {
+/*
+ * Set Primary 2FA Method
+ */
+export async function makePrimaryHandler(req, res) {
 
     try {
-        const userId = request.user?.id;
+        const accountId = req.user?.id;
 
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const { method } = request.body;
+        const { method } = req.body;
         console.log('Method to be primary: ', method);
-        const twoFa = await locateMfaByAccountIdAndType(this.db, user.id, method);
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
-        console.log('TwoFa: ', twoFa);
-        if (!twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'METHOD_NOT_ENABLED'));
+        const mfaRecord = await locateMfaByAccountIdAndType(this.db, account.id, method);
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'METHOD_NOT_EXIST'));
+        console.log('MfaRecord: ', mfaRecord);
+        if (!mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'METHOD_NOT_ENABLED'));
 
-        await makeMfaPrimaryByAccountIdAndType(this.db, user.id, method);
-        return reply.code(200).send(createResponse(200, 'PRIMARY_METHOD_UPDATED'));
-    } catch (error) {
-        console.log('Error: ', error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        await makeMfaPrimaryByAccountIdAndType(this.db, account.id, method);
+        return res.code(200).send(createResponse(200, 'PRIMARY_METHOD_UPDATED'));
+    } catch (err) {
+        console.log('Error: ', err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }

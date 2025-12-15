@@ -1,3 +1,8 @@
+/*
+ * 42 OAuth Controller
+ * Handles 42 Intra OAuth authentication flow
+ */
+
 import {
     insertAccountWithOAuth,
     locateOAuthProvider,
@@ -18,20 +23,31 @@ import {
     setSessionCookies
 } from "../utils/cookieManager.js";
 
-export async function fortyTwoSetupHandler(request, reply) {
+// OAuth URLs
+const INTRA_AUTH_URL = 'https://api.intra.42.fr/oauth/authorize';
+const INTRA_TOKEN_URL = 'https://api.intra.42.fr/oauth/token';
+const INTRA_USERINFO_URL = 'https://api.intra.42.fr/v2/me';
 
-    const url = `https://api.intra.42.fr/oauth/authorize?client_id=${process.env.FORTY_TWO_ID}&redirect_uri=${process.env.FORTY_TWO_REDIRECT_URI}&response_type=code`;
-    reply.redirect(url);
+/*
+ * Initiate 42 OAuth Flow
+ */
+export async function fortyTwoSetupHandler(req, res) {
+
+    const authUrl = `${INTRA_AUTH_URL}?client_id=${process.env.FORTY_TWO_ID}&redirect_uri=${process.env.FORTY_TWO_REDIRECT_URI}&response_type=code`;
+    res.redirect(authUrl);
 }
 
-export async function fortyTwoLoginHandler(request, reply) {
+/*
+ * Handle 42 OAuth Callback
+ */
+export async function fortyTwoLoginHandler(req, res) {
 
     try {
-        clearSessionCookies(reply);
-        const { code } = request.query;
+        clearSessionCookies(res);
+        const { code } = req.query;
         if (!code)
-            return reply.redirect(`${process.env.FRONT_END_URL}/login`);
-        const tokens = await fetch('https://api.intra.42.fr/oauth/token', {
+            return res.redirect(process.env.FRONT_END_URL);
+        const tokenResponse = await fetch(INTRA_TOKEN_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -43,81 +59,80 @@ export async function fortyTwoLoginHandler(request, reply) {
             }).toString()
         });
 
-        console.log('42 tokens: ', tokens);
-        if (!tokens.ok) {
-            const errorText = await tokens.text();
+        console.log('42 tokens: ', tokenResponse);
+        if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
             console.log('42 tokens error: ', errorText);
-            return reply.redirect(`${process.env.FRONT_END_URL}/login`);
+            return res.redirect(process.env.FRONT_END_URL);
         }
 
-        const { access_token } = await tokens.json();
-        const userinfo = await fetch('https://api.intra.42.fr/v2/me', {
+        const { access_token } = await tokenResponse.json();
+        const userInfoResponse = await fetch(INTRA_USERINFO_URL, {
             method: 'GET',
             headers: { Authorization: `Bearer ${access_token}` }
         });
 
-        console.log('User info: ', userinfo);
-        const userInfo = await userinfo.json();
-        console.log('User Info: ', userInfo);
-        const actualInfo = {
+        console.log('User info: ', userInfoResponse);
+        const intraUserInfo = await userInfoResponse.json();
+        console.log('User Info: ', intraUserInfo);
+        const oauthData = {
             provider: '42',
-            sub: userInfo.id,
-            email: userInfo.email,
+            sub: intraUserInfo.id,
+            email: intraUserInfo.email,
             accessToken: access_token,
             refreshToken: null
         }
 
         let isNewUser = false;
-        let user;
-        const oauthId = await locateOAuthProvider(this.db, '42', userInfo.id);
-        if (oauthId) {
-            user = await locateAccountById(this.db, oauthId.user_id);
-            if (user)
-                console.log('Already existing user with ID:', user.id);
+        let account;
+        const existingOAuth = await locateOAuthProvider(this.db, '42', intraUserInfo.id);
+        if (existingOAuth) {
+            account = await locateAccountById(this.db, existingOAuth.user_id);
+            if (account)
+                console.log('Already existing user with ID:', account.id);
         } else {
-            user = await locateAccountByEmail(this.db, userInfo.email);
-            if (user) {
-                console.log(`Existing user with ID : ${user.id} but not linked to 42`);
-                await connectOAuthToAccount(this.db, user.id, actualInfo);
+            account = await locateAccountByEmail(this.db, intraUserInfo.email);
+            if (account) {
+                console.log(`Existing user with ID : ${account.id} but not linked to 42`);
+                await connectOAuthToAccount(this.db, account.id, oauthData);
             }
             else {
                 console.log('New User');
                 isNewUser = true;
-                const uniqueUserName = await generateUsername(this.db, userInfo.login || userInfo.email.split('@')[0]);
-                const newUserId = await insertAccountWithOAuth(this.db, {
+                const uniqueUserName = await generateUsername(this.db, intraUserInfo.login || intraUserInfo.email.split('@')[0]);
+                const newAccountId = await insertAccountWithOAuth(this.db, {
                     username: uniqueUserName,
-                    ...actualInfo
+                    ...oauthData
                 })
-                user = await locateAccountById(this.db, newUserId);
+                account = await locateAccountById(this.db, newAccountId);
             }
         }
 
-        const accessToken = await this.jwt.signAT({ id: user.id });
-        const tokenExist = await locateValidTokenByAccountId(this.db, user.id);
+        const accessToken = await this.jwt.signAT({ id: account.id });
+        const existingToken = await locateValidTokenByAccountId(this.db, account.id);
         let refreshToken;
-        if (tokenExist) {
-            refreshToken = tokenExist.token;
+        if (existingToken) {
+            refreshToken = existingToken.token;
         } else {
-            refreshToken = this.jwt.signRT({ id: user.id });
-            await insertToken(this.db, refreshToken, user.id);
+            refreshToken = this.jwt.signRT({ id: account.id });
+            await insertToken(this.db, refreshToken, account.id);
         }
-        setSessionCookies(reply, accessToken, refreshToken);
-        await this.redis.sAdd(`userIds`, `${user.id}`);
+        setSessionCookies(res, accessToken, refreshToken);
+        await this.redis.sAdd(`userIds`, `${account.id}`);
 
         if (isNewUser) {
             this.rabbit.produceMessage({
                 type: 'INSERT',
-                userId: user.id,
-                username: user.username,
-                email: user.email,
-                avatar_url: userInfo.image.link
+                userId: account.id,
+                username: account.username,
+                email: account.email,
+                avatar_url: intraUserInfo.image.link
             }, 'profile.user.created');
         }
 
-        return reply.redirect(`${process.env.FRONT_END_URL}/salon`);
-    } catch (error) {
-        console.log(error);
-        return reply.redirect(`${process.env.FRONT_END_URL}/login`);
+        return res.redirect(process.env.FRONT_END_URL);
+    } catch (err) {
+        console.log(err);
+        return res.redirect(process.env.FRONT_END_URL);
     }
 }
-

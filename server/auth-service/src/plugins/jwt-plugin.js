@@ -1,3 +1,7 @@
+/*
+ * JWT Plugin - Token Management
+ * Handles signing and verification of access, refresh, and temporary tokens
+ */
 import fp from "fastify-plugin";
 import jwt from "jsonwebtoken";
 import { createResponse } from "../utils/helpers.js";
@@ -7,100 +11,100 @@ async function jwtPlugin(fastify, options) {
   const { accessTokenKey, refreshTokenKey, tempTokenKey } = options;
 
   fastify.decorate("jwt", {
-    //AT = Access Token (15 minutes) \ RT = Refresh Token (7 days) \ TT = Temporary Token (5 minutes)
-    signTT(payload, expiresIn = "5m") {
+    // TT = Temporary Token (5 min) - used for 2FA flow
+    signTT(tokenPayload, duration = "5m") {
       try {
-        return jwt.sign(payload, tempTokenKey, { expiresIn });
-      } catch (error) {
-        console.log("Error in signing temp token: ", error);
-        throw new Error(error);
+        return jwt.sign(tokenPayload, tempTokenKey, { expiresIn: duration });
+      } catch (err) {
+        console.log("Error in signing temp token: ", err);
+        throw new Error(err);
       }
     },
 
-    async signAT(payload, expiresIn = "15m") {
+    // AT = Access Token (15 min) - main auth token
+    async signAT(tokenPayload, duration = "15m") {
       try {
-        return jwt.sign(payload, accessTokenKey, { expiresIn });
-      } catch (error) {
-        console.log("Error in signing access token: ", error);
-        throw new Error(error);
+        return jwt.sign(tokenPayload, accessTokenKey, { expiresIn: duration });
+      } catch (err) {
+        console.log("Error in signing access token: ", err);
+        throw new Error(err);
       }
     },
 
-    signRT(payload, expiresIn = "7d") {
+    // RT = Refresh Token (7 days) - for token renewal
+    signRT(tokenPayload, duration = "7d") {
       try {
-        delete payload.exp;
-        return jwt.sign(payload, refreshTokenKey, { expiresIn });
-      } catch (error) {
-        console.log("Error in signing refresh token: ", error);
-        throw new Error(error);
+        delete tokenPayload.exp;
+        return jwt.sign(tokenPayload, refreshTokenKey, { expiresIn: duration });
+      } catch (err) {
+        console.log("Error in signing refresh token: ", err);
+        throw new Error(err);
       }
     },
 
-    verifyAT(token) {
+    verifyAT(tokenString) {
       try {
-        return jwt.verify(token, accessTokenKey);
-      } catch (error) {
-        console.log("Error in verifying access token: ", error);
-        throw new Error(error);
+        return jwt.verify(tokenString, accessTokenKey);
+      } catch (err) {
+        console.log("Error in verifying access token: ", err);
+        throw new Error(err);
       }
     },
 
-    verifyRT(token) {
+    verifyRT(tokenString) {
       try {
-        return jwt.verify(token, refreshTokenKey);
-      } catch (error) {
-        console.log("Error in verifying refresh token: ", error);
-        throw new Error(error);
+        return jwt.verify(tokenString, refreshTokenKey);
+      } catch (err) {
+        console.log("Error in verifying refresh token: ", err);
+        throw new Error(err);
       }
     },
 
-    verifyTT(token) {
+    verifyTT(tokenString) {
       try {
-        return jwt.verify(token, tempTokenKey);
-      } catch (error) {
-        console.log("Error in verifying temp token: ", error);
-        throw new Error(error);
+        return jwt.verify(tokenString, tempTokenKey);
+      } catch (err) {
+        console.log("Error in verifying temp token: ", err);
+        throw new Error(err);
       }
     },
   });
 
+  // Authentication middleware
   fastify.decorate("authenticate", async (request, reply) => {
     try {
-      let cookie = getSessionCookies(request);
-      let decodedUser;
-      if (!cookie.accessToken) {
-        cookie = getTempSessionToken(request);
-        if (!cookie)
+      let cookieData = getSessionCookies(request);
+      let decodedPayload;
+      
+      if (!cookieData.accessToken) {
+        cookieData = getTempSessionToken(request);
+        if (!cookieData) {
           return reply.code(401).send(createResponse(401, "TOKEN_REQUIRED"));
+        }
         try {
-          decodedUser = await fastify.jwt.verifyTT(cookie);
-          request.user = decodedUser;
+          decodedPayload = await fastify.jwt.verifyTT(cookieData);
+          request.user = decodedPayload;
           return;
-        } catch (error) {
-          if (error.name === "TokenExpiredError")
-            return reply
-              .code(401)
-              .send(createResponse(401, "TEMP_TOKEN_EXPIRED"));
-          return reply
-            .code(401)
-            .send(createResponse(401, "TEMP_TOKEN_INVALID"));
+        } catch (err) {
+          if (err.name === "TokenExpiredError") {
+            return reply.code(401).send(createResponse(401, "TEMP_TOKEN_EXPIRED"));
+          }
+          return reply.code(401).send(createResponse(401, "TEMP_TOKEN_INVALID"));
         }
       }
+      
       try {
-        decodedUser = await fastify.jwt.verifyAT(cookie.accessToken);
-        request.user = decodedUser;
+        decodedPayload = await fastify.jwt.verifyAT(cookieData.accessToken);
+        request.user = decodedPayload;
         return;
-      } catch (error) {
-        if (error.name === "TokenExpiredError")
-          return reply
-            .code(401)
-            .send(createResponse(401, "ACCESS_TOKEN_EXPIRED"));
-        return reply
-          .code(401)
-          .send(createResponse(401, "ACCESS_TOKEN_INVALID"));
+      } catch (err) {
+        if (err.name === "TokenExpiredError") {
+          return reply.code(401).send(createResponse(401, "ACCESS_TOKEN_EXPIRED"));
+        }
+        return reply.code(401).send(createResponse(401, "ACCESS_TOKEN_INVALID"));
       }
-    } catch (error) {
-      console.log("Error while authenticating: ", error);
+    } catch (err) {
+      console.log("Error while authenticating: ", err);
       return reply.code(500).send(createResponse(500, "INTERNAL_SERVER_ERROR"));
     }
   });

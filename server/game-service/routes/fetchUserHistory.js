@@ -1,28 +1,28 @@
-async function fetchUserHistory(req, reply, db) {
-    const userId = req.body.userId;
+/*
+ * Fetch User History Route
+ * Retrieves game history for a user
+ */
 
-    console.log("Fetching history for user ID:", userId);
+const HISTORY_QUERY = `SELECT * FROM games WHERE user_id = ? ORDER BY created_at DESC`;
 
-    if (!userId) {
-        return reply.status(400).send({ error: "User ID is required" });
+async function fetchUserHistory(req, res, dbConn) {
+    const accountId = req.body.userId;
+
+    console.log("Fetching history for user ID:", accountId);
+
+    if (!accountId) {
+        return res.status(400).send({ error: "User ID is required" });
     }
 
-    const query = `
-    SELECT * FROM games
-    WHERE user_id = ?
-    ORDER BY created_at DESC
-  `;
-
     try {
-        // Use the Promise-based API from your SQLite plugin
-        const rows = await db.all(query, [userId]);
+        const gameRecords = await dbConn.all(HISTORY_QUERY, [accountId]);
 
-        console.log(`Found ${rows.length} games for user ${userId}`);
+        console.log(`Found ${gameRecords.length} games for user ${accountId}`);
 
-        return reply.send(rows);
+        return res.send(gameRecords);
     } catch (err) {
         console.error("Error fetching user history:", err.message);
-        return reply.status(500).send({ error: "Database error" });
+        return res.status(500).send({ error: "Database error" });
     }
 }
 

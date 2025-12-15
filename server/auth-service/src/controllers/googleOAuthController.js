@@ -1,22 +1,38 @@
+/*
+ * Google OAuth Controller
+ * Handles Google OAuth2 authentication flow
+ */
+
 import { insertAccountWithOAuth, locateOAuthProvider, locateAccountByEmail, locateAccountById, connectOAuthToAccount } from "../models/accountRepository.js";
 import { insertToken, locateValidTokenByAccountId } from "../models/tokenRepository.js";
 import { createResponse, generateUsername } from "../utils/helpers.js";
 import { setSessionCookies, clearSessionCookies } from "../utils/cookieManager.js";
 
-export async function googleSetupHandler(request, reply) {
+// OAuth URLs
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=profile email&access_type=offline&prompt=consent`;
-    reply.redirect(url);
+/*
+ * Initiate Google OAuth Flow
+ */
+export async function googleSetupHandler(req, res) {
+
+    const authUrl = `${GOOGLE_AUTH_URL}?client_id=${process.env.GOOGLE_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=profile email&access_type=offline&prompt=consent`;
+    res.redirect(authUrl);
 }
 
-export async function googleLoginHandler(request, reply) {
+/*
+ * Handle Google OAuth Callback
+ */
+export async function googleLoginHandler(req, res) {
 
     try {
-        clearSessionCookies(reply);
-        const { code } = request.query;
+        clearSessionCookies(res);
+        const { code } = req.query;
         if (!code)
-            return reply.redirect(`${process.env.FRONT_END_URL}/login`);
-        const tokens = await fetch('https://oauth2.googleapis.com/token', {
+            return res.redirect(process.env.FRONT_END_URL);
+        const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -28,79 +44,79 @@ export async function googleLoginHandler(request, reply) {
             }).toString()
         });
 
-        console.log('Google tokens: ', tokens);
-        if (!tokens.ok) {
-            const errorText = await tokens.text();
+        console.log('Google tokens: ', tokenResponse);
+        if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
             console.log('Google tokens error: ', errorText);
-            return reply.redirect(`${process.env.FRONT_END_URL}/login`);
+            return res.redirect(process.env.FRONT_END_URL);
         }
 
-        const { access_token, refresh_token } = await tokens.json();
-        const userinfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        const { access_token, refresh_token } = await tokenResponse.json();
+        const userInfoResponse = await fetch(GOOGLE_USERINFO_URL, {
             method: 'GET',
             headers: { Authorization: `Bearer ${access_token}` }
         });
 
-        const userInfo = await userinfo.json();
-        console.log('User info: ', userInfo);
-        const actualInfo = {
+        const googleUserInfo = await userInfoResponse.json();
+        console.log('User info: ', googleUserInfo);
+        const oauthData = {
             provider: 'google',
-            sub: userInfo.sub,
-            email: userInfo.email,
+            sub: googleUserInfo.sub,
+            email: googleUserInfo.email,
             accessToken: access_token,
             refreshToken: refresh_token
         }
 
         let isNewUser = false;
-        let user;
-        const oauthId = await locateOAuthProvider(this.db, 'google', userInfo.sub);
-        if (oauthId) {
-            user = await locateAccountById(this.db, oauthId.user_id);
-            if (user)
-                console.log('Already existing user with ID:', user.id);
+        let account;
+        const existingOAuth = await locateOAuthProvider(this.db, 'google', googleUserInfo.sub);
+        if (existingOAuth) {
+            account = await locateAccountById(this.db, existingOAuth.user_id);
+            if (account)
+                console.log('Already existing user with ID:', account.id);
         } else {
-            user = await locateAccountByEmail(this.db, userInfo.email);
-            if (user) {
-                console.log(`Existing user with ID : ${user.id} but not linked to google`);
-                await connectOAuthToAccount(this.db, user.id, actualInfo);
+            account = await locateAccountByEmail(this.db, googleUserInfo.email);
+            if (account) {
+                console.log(`Existing user with ID : ${account.id} but not linked to google`);
+                await connectOAuthToAccount(this.db, account.id, oauthData);
             }
             else {
                 console.log('New User');
                 isNewUser = true;
-                const uniqueUserName = await generateUsername(this.db, userInfo.given_name || userInfo.email.split('@')[0]);
-                const newUserId = await insertAccountWithOAuth(this.db, {
+                const uniqueUserName = await generateUsername(this.db, googleUserInfo.given_name || googleUserInfo.email.split('@')[0]);
+                const newAccountId = await insertAccountWithOAuth(this.db, {
                     username: uniqueUserName,
-                    ...actualInfo
+                    ...oauthData
                 })
-                user = await locateAccountById(this.db, newUserId);
+                account = await locateAccountById(this.db, newAccountId);
             }
         }
 
-        const accessToken = await this.jwt.signAT({ id: user.id });
-        const tokenExist = await locateValidTokenByAccountId(this.db, user.id);
+        const accessToken = await this.jwt.signAT({ id: account.id });
+        const existingToken = await locateValidTokenByAccountId(this.db, account.id);
         let refreshToken;
-        if (tokenExist) {
-            refreshToken = tokenExist.token;
+        if (existingToken) {
+            refreshToken = existingToken.token;
         } else {
-            refreshToken = this.jwt.signRT({ id: user.id });
-            await insertToken(this.db, refreshToken, user.id);
+            refreshToken = this.jwt.signRT({ id: account.id });
+            await insertToken(this.db, refreshToken, account.id);
         }
-        setSessionCookies(reply, accessToken, refreshToken);
-        await this.redis.sAdd(`userIds`, `${user.id}`);
+        setSessionCookies(res, accessToken, refreshToken);
+        await this.redis.sAdd(`userIds`, `${account.id}`);
 
         if (isNewUser) {
             this.rabbit.produceMessage({
                 type: 'INSERT',
-                userId: user.id,
-                username: user.username,
-                email: user.email,
-                avatar_url: userInfo.picture
+                userId: account.id,
+                username: account.username,
+                email: account.email,
+                avatar_url: googleUserInfo.picture
             }, 'profile.user.created');
         }
 
-        return reply.redirect(`${process.env.FRONT_END_URL}/salon`);
-    } catch (error) {
-        console.log(error);
-        return reply.redirect(`${process.env.FRONT_END_URL}/login`);
+        return res.redirect(process.env.FRONT_END_URL);
+    } catch (err) {
+        console.log(err);
+        return res.redirect(process.env.FRONT_END_URL);
     }
 }

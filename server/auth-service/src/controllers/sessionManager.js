@@ -1,3 +1,8 @@
+/*
+ * Session Manager Controller
+ * Handles user authentication, registration and session operations
+ */
+
 import bcrypt from 'bcrypt';
 import speakeasy from 'speakeasy';
 import {
@@ -39,184 +44,203 @@ import {
     insertPendingChange
 } from '../models/pendingChangeRepository.js';
 
-const hash = bcrypt.hash;
-const compare = bcrypt.compare;
+// Password hashing utilities
+const hashPassword = bcrypt.hash;
+const verifyPassword = bcrypt.compare;
 
-export async function initiatePasswordReset(request, reply) {
+// OTP code generation helper
+const generateOtpCode = () => `${Math.floor(100000 + Math.random() * 900000)}`;
+
+/*
+ * Password Reset - Initiate
+ */
+export async function initiatePasswordReset(req, res) {
     
     try {
-        clearSessionCookies(reply);
+        clearSessionCookies(res);
         
-        const { email } = request.body;
+        const { email } = req.body;
         
-        const user = await locateAccountByEmail(this.db, email);
-        if (!user)
-            return reply.code(400).send(createResponse(400, 'INVALID_EMAIL'));
-        if (!user.password)
-            return reply.code(400).send(createResponse(400, 'USER_LINKED'));
+        const account = await locateAccountByEmail(this.db, email);
+        if (!account)
+            return res.code(400).send(createResponse(400, 'INVALID_EMAIL'));
+        if (!account.password)
+            return res.code(400).send(createResponse(400, 'USER_LINKED'));
 
-        const otpCode = `${Math.floor(100000 + Math.random() * 900000) }`
+        const otpCode = generateOtpCode();
         
-        const twoFa = await locateMfaByAccountId(this.db, user.id);
-        if (twoFa)
-            await modifyOtpCode(this.db, otpCode, user.id, twoFa.type);
+        const mfaRecord = await locateMfaByAccountId(this.db, account.id);
+        if (mfaRecord)
+            await modifyOtpCode(this.db, otpCode, account.id, mfaRecord.type);
         else    
-            await storeOtpCode(this.db, otpCode, user.id);
-        await this.sendMail(otpCode, user.email);
+            await storeOtpCode(this.db, otpCode, account.id);
+        await this.sendMail(otpCode, account.email);
 
-        const tempToken = this.jwt.signTT({ id: user.id });
-        setTempSessionToken(reply, tempToken);
-        return reply.code(200).send(createResponse(200, 'CODE_SENT'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        const tempToken = this.jwt.signTT({ id: account.id });
+        setTempSessionToken(res, tempToken);
+        return res.code(200).send(createResponse(200, 'CODE_SENT'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function confirmResetCode(request, reply) {
+/*
+ * Password Reset - Verify OTP
+ */
+export async function confirmResetCode(req, res) {
     
     try {
-        const userId = request.user?.id;
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const accountId = req.user?.id;
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
         
-        const twoFa = await locateMfaByAccountId(this.db, user.id);
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'CODE_NOT_SET'));
+        const mfaRecord = await locateMfaByAccountId(this.db, account.id);
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'CODE_NOT_SET'));
 
-        const { otpCode } = request.body;
+        const { otpCode } = req.body;
         if (!otpCode)
-            return reply.code(401).send(createResponse(401, 'OTP_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'OTP_REQUIRED'));
 
-        if (twoFa.otp !== otpCode || twoFa.otp_exp < Date.now())
-            return reply.code(401).send(createResponse(401, 'OTP_INVALID'));
-        await clearOtpCode(this.db, user.id, twoFa.type);
-        return reply.code(200).send(createResponse(200, 'CODE_VERIFIED'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        if (mfaRecord.otp !== otpCode || mfaRecord.otp_exp < Date.now())
+            return res.code(401).send(createResponse(401, 'OTP_INVALID'));
+        await clearOtpCode(this.db, account.id, mfaRecord.type);
+        return res.code(200).send(createResponse(200, 'CODE_VERIFIED'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function changeUserPassword(request, reply) {
+/*
+ * Password Reset - Change Password
+ */
+export async function changeUserPassword(req, res) {
     
     try {
         
-        const userId = request.user?.id;
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const accountId = req.user?.id;
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        if (!user.password)
-            return reply.code(400).send(createResponse(400, 'USER_LINKED'));
+        if (!account.password)
+            return res.code(400).send(createResponse(400, 'USER_LINKED'));
 
-        const { password, confirmPassword } = request.body;
+        const { password, confirmPassword } = req.body;
 
         if (password !== confirmPassword)
-            return reply.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
+            return res.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
         if (!validatePassword(password))
-            return reply.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
+            return res.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
 
-        const hashedPassword = await hash(password, 10);
-        await modifyAccount(this.db, user.id, hashedPassword);
+        const hashedPass = await hashPassword(password, 10);
+        await modifyAccount(this.db, account.id, hashedPass);
 
-        const twoFa = await locatePrimaryMfaByAccountId(this.db, user.id);
-        if (twoFa && twoFa.enabled)
+        const mfaRecord = await locatePrimaryMfaByAccountId(this.db, account.id);
+        if (mfaRecord && mfaRecord.enabled)
         {
-            const tempToken = this.jwt.signTT({ id: user.id });
-            if (twoFa.type === 'email')
+            const tempToken = this.jwt.signTT({ id: account.id });
+            if (mfaRecord.type === 'email')
             {
-                const otpCode = `${Math.floor(100000 + Math.random() * 900000) }`
-                await modifyOtpCode(this.db, otpCode, user.id, twoFa.type);
-                await this.sendMail(otpCode, user.email);
+                const otpCode = generateOtpCode();
+                await modifyOtpCode(this.db, otpCode, account.id, mfaRecord.type);
+                await this.sendMail(otpCode, account.email);
             }
-            clearSessionCookies(reply);
-            setTempSessionToken(reply, tempToken);
-            return reply.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: twoFa.type  }));
+            clearSessionCookies(res);
+            setTempSessionToken(res, tempToken);
+            return res.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: mfaRecord.type  }));
         }
-        const accessToken = await this.jwt.signAT({ id: user.id });
-        const tokenExist = await locateValidTokenByAccountId(this.db, user.id);
+        const accessToken = await this.jwt.signAT({ id: account.id });
+        const existingToken = await locateValidTokenByAccountId(this.db, account.id);
         let refreshToken;
-        if (tokenExist) {
-            refreshToken = tokenExist.token;
+        if (existingToken) {
+            refreshToken = existingToken.token;
         } else{
-            refreshToken = this.jwt.signRT({ id: user.id });
-            await insertToken(this.db, refreshToken, user.id);
+            refreshToken = this.jwt.signRT({ id: account.id });
+            await insertToken(this.db, refreshToken, account.id);
         }
-        clearSessionCookies(reply);
-        setSessionCookies(reply, accessToken, refreshToken);
-        return reply.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        clearSessionCookies(res);
+        setSessionCookies(res, accessToken, refreshToken);
+        return res.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function authenticateUser(request, reply) {
+/*
+ * User Login
+ */
+export async function authenticateUser(req, res) {
     
     try {
-        clearSessionCookies(reply);
-        const { username, email, password } = request.body;
-        const user = await locateAccount(this.db, username, email);
-        if (!user)
-            return reply.code(400).send(createResponse(400, 'INVALID_CREDENTIALS'));
+        clearSessionCookies(res);
+        const { username, email, password } = req.body;
+        const account = await locateAccount(this.db, username, email);
+        if (!account)
+            return res.code(400).send(createResponse(400, 'INVALID_CREDENTIALS'));
 
-        if (!user.password)
-            return reply.code(400).send(createResponse(400, 'USER_ALREADY_LINKED'));
-        const matched = await compare(password, user.password);
+        if (!account.password)
+            return res.code(400).send(createResponse(400, 'USER_ALREADY_LINKED'));
+        const matched = await verifyPassword(password, account.password);
         if (!matched)
-            return reply.code(400).send(createResponse(400, 'INVALID_PASSWORD'));
+            return res.code(400).send(createResponse(400, 'INVALID_PASSWORD'));
         
-        const twoFa = await locatePrimaryMfaByAccountId(this.db, user.id);
-        if (twoFa && twoFa.enabled)
+        const mfaRecord = await locatePrimaryMfaByAccountId(this.db, account.id);
+        if (mfaRecord && mfaRecord.enabled)
         {
-            const tempToken = this.jwt.signTT({ id: user.id });
-            if (twoFa.type === 'email')
+            const tempToken = this.jwt.signTT({ id: account.id });
+            if (mfaRecord.type === 'email')
             {
-                const otpCode = `${Math.floor(100000 + Math.random() * 900000) }`
-                await modifyOtpCode(this.db, otpCode, user.id, 'email');
-                await this.sendMail(otpCode, user.email);
+                const otpCode = generateOtpCode();
+                await modifyOtpCode(this.db, otpCode, account.id, 'email');
+                await this.sendMail(otpCode, account.email);
             }
-            setTempSessionToken(reply, tempToken);
-            return reply.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: twoFa.type  }));
+            setTempSessionToken(res, tempToken);
+            return res.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: mfaRecord.type  }));
         }
-        const accessToken = await this.jwt.signAT({ id: user.id });
-        const tokenExist = await locateValidTokenByAccountId(this.db, user.id);
+        const accessToken = await this.jwt.signAT({ id: account.id });
+        const existingToken = await locateValidTokenByAccountId(this.db, account.id);
         let refreshToken;
-        if (tokenExist) {
-            refreshToken = tokenExist.token;
+        if (existingToken) {
+            refreshToken = existingToken.token;
         } else {
-            refreshToken = this.jwt.signRT({ id: user.id });
-            await insertToken(this.db, refreshToken, user.id);
+            refreshToken = this.jwt.signRT({ id: account.id });
+            await insertToken(this.db, refreshToken, account.id);
         }
-        setSessionCookies(reply, accessToken, refreshToken);
-        return reply.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        setSessionCookies(res, accessToken, refreshToken);
+        return res.code(200).send(createResponse(200, 'USER_LOGGED_IN'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function createAccount(request, reply) {
+/*
+ * User Registration
+ */
+export async function createAccount(req, res) {
     
     try {
-        const { email, username, password, confirmPassword, gender} = request.body;
+        const { email, username, password, confirmPassword, gender} = req.body;
         if (password !== confirmPassword)
-            return reply.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
+            return res.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
         if (!validatePassword(password))
-            return reply.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
-        const userExist = await locateAccount(this.db, username, email);
-        if (userExist)
-            return reply.code(400).send(createResponse(400, 'USER_EXISTS'));
+            return res.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
+        const accountExists = await locateAccount(this.db, username, email);
+        if (accountExists)
+            return res.code(400).send(createResponse(400, 'USER_EXISTS'));
         
-        const hashedPassword = await hash(password, 10);
-        const userId = await insertAccount(this.db, username, email, hashedPassword);
+        const hashedPass = await hashPassword(password, 10);
+        const newAccountId = await insertAccount(this.db, username, email, hashedPass);
         
-        await this.redis.sAdd(`userIds`, `${userId}`);
+        await this.redis.sAdd(`userIds`, `${newAccountId}`);
         this.rabbit.produceMessage({
             type: 'INSERT',
-            userId: userId,
+            userId: newAccountId,
             username: username,
             email: email,
             gender: gender
@@ -224,238 +248,256 @@ export async function createAccount(request, reply) {
         'profile.user.created'
         );
         
-        return reply.code(201).send(createResponse(201, 'USER_REGISTERED'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(201).send(createResponse(201, 'USER_REGISTERED'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function terminateSession(request, reply) {
+/*
+ * User Logout
+ */
+export async function terminateSession(req, res) {
     
     try {
-        clearSessionCookies(reply);
-        const userId = request.user?.id;
+        clearSessionCookies(res);
+        const accountId = req.user?.id;
         
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
         
-        const tokens = getSessionCookies(request);        
+        const tokens = getSessionCookies(req);        
         if (!tokens.refreshToken)
-            return reply.code(401).send(createResponse(401, 'REFRESH_TOKEN_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'REFRESH_TOKEN_REQUIRED'));
         
-        const tokenExist = await locateToken(this.db, tokens.refreshToken);
-        if (!tokenExist || tokenExist.revoked)
-            return reply.code(401).send(createResponse(401, 'REFRESH_TOKEN_INVALID'));
+        const tokenRecord = await locateToken(this.db, tokens.refreshToken);
+        if (!tokenRecord || tokenRecord.revoked)
+            return res.code(401).send(createResponse(401, 'REFRESH_TOKEN_INVALID'));
         
         await invalidateToken(this.db, tokens.refreshToken);
-        return reply.code(200).send(createResponse(200, 'USER_LOGGED_OUT'));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'USER_LOGGED_OUT'));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function fetchCurrentUser(request, reply) {
+/*
+ * Get Current User Info
+ */
+export async function fetchCurrentUser(req, res) {
     
     try {
-        const userId = request.user?.id;
+        const accountId = req.user?.id;
         
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
         
-        return reply.code(200).send(createResponse(200, 'USER_FETCHED', { id: user.id, username: user.username, email: user.email }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'USER_FETCHED', { id: account.id, username: account.username, email: account.email }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function renewAccessToken(request, reply) {
+/*
+ * Refresh Access Token
+ */
+export async function renewAccessToken(req, res) {
     
     try {
-        const tokens = getSessionCookies(request);
+        const tokens = getSessionCookies(req);
         if (!tokens.refreshToken)
-            return reply.code(401).send(createResponse(401, 'REFRESH_TOKEN_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'REFRESH_TOKEN_REQUIRED'));
         
-        const tokenExist = await locateToken(this.db, tokens.refreshToken);
-        if (!tokenExist || tokenExist.revoked)
-            return reply.code(401).send(createResponse(401, 'REFRESH_TOKEN_INVALID'));
+        const tokenRecord = await locateToken(this.db, tokens.refreshToken);
+        if (!tokenRecord || tokenRecord.revoked)
+            return res.code(401).send(createResponse(401, 'REFRESH_TOKEN_INVALID'));
 
-        const payload = await this.jwt.verifyRT(tokenExist.token);
+        const tokenPayload = await this.jwt.verifyRT(tokenRecord.token);
 
-        await invalidateToken(this.db, tokenExist.token);
+        await invalidateToken(this.db, tokenRecord.token);
 
-        const accessToken = await this.jwt.signAT({ id: payload.id });
-        const newRefreshToken = this.jwt.signRT({ id: payload.id });
+        const accessToken = await this.jwt.signAT({ id: tokenPayload.id });
+        const newRefreshToken = this.jwt.signRT({ id: tokenPayload.id });
 
-        await insertToken(this.db, newRefreshToken, payload.id);
-        setSessionCookies(reply, accessToken, newRefreshToken);
-        return reply.code(200).send(createResponse(200, 'TOKEN_REFRESHED'));
-    } catch (error) {
-        if (error.name === 'TokenExpiredError')
-            return reply.code(401).send(createResponse(401, 'REFRESH_TOKEN_EXPIRED'));
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        await insertToken(this.db, newRefreshToken, tokenPayload.id);
+        setSessionCookies(res, accessToken, newRefreshToken);
+        return res.code(200).send(createResponse(200, 'TOKEN_REFRESHED'));
+    } catch (err) {
+        if (err.name === 'TokenExpiredError')
+            return res.code(401).send(createResponse(401, 'REFRESH_TOKEN_EXPIRED'));
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-
-export async function modifyCredentials(request, reply) {
+/*
+ * Update User Credentials (Email/Password)
+ */
+export async function modifyCredentials(req, res) {
     
-    const userId = request.user?.id;
-    const { email, oldPassword, newPassword, confirmNewPassword } = request.body;
+    const accountId = req.user?.id;
+    const { email, oldPassword, newPassword, confirmNewPassword } = req.body;
     try {
         
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        let toUpdate = "";
+        let updateField = "";
         
-        let hashedPassword = null;
+        let hashedPass = null;
         if (newPassword || confirmNewPassword || oldPassword) {
             if (!newPassword || !confirmNewPassword || !oldPassword)
-                return reply.code(400).send(createResponse(400, 'PASSWORDS_REQUIRED'));
+                return res.code(400).send(createResponse(400, 'PASSWORDS_REQUIRED'));
             if (newPassword === oldPassword)
-                return reply.code(400).send(createResponse(400, 'SAME_PASSWORD'));
-            let matched = await compare(oldPassword, user.password);
+                return res.code(400).send(createResponse(400, 'SAME_PASSWORD'));
+            let matched = await verifyPassword(oldPassword, account.password);
             if (!matched)
-                return reply.code(400).send(createResponse(400, 'INVALID_PASSWORD'));
+                return res.code(400).send(createResponse(400, 'INVALID_PASSWORD'));
             if (newPassword !== confirmNewPassword)
-                return reply.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
+                return res.code(400).send(createResponse(400, 'UNMATCHED_PASSWORDS'));
             if (!validatePassword(newPassword))
-                return reply.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
-            hashedPassword = await hash(newPassword, 10);
-            toUpdate = "password";
+                return res.code(400).send(createResponse(400, 'PASSWORD_POLICY'));
+            hashedPass = await hashPassword(newPassword, 10);
+            updateField = "password";
         }
 
 
 
-        const twoFa = await locatePrimaryMfaByAccountId(this.db, user.id);
-        if (twoFa && twoFa.enabled)
+        const mfaRecord = await locatePrimaryMfaByAccountId(this.db, account.id);
+        if (mfaRecord && mfaRecord.enabled)
         {
-            if (twoFa.type === 'email')
+            if (mfaRecord.type === 'email')
             {
-                const otpCode = `${Math.floor(100000 + Math.random() * 900000) }`
-                await modifyOtpCode(this.db, otpCode, user.id, 'email');
-                await this.sendMail(otpCode, user.email);
+                const otpCode = generateOtpCode();
+                await modifyOtpCode(this.db, otpCode, account.id, 'email');
+                await this.sendMail(otpCode, account.email);
             }
-            await insertPendingChange(this.db, user.id, email, hashedPassword);
-            return reply.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: twoFa.type  }));
+            await insertPendingChange(this.db, account.id, email, hashedPass);
+            return res.code(206).send(createResponse(206, 'TWOFA_REQUIRED', { twoFaType: mfaRecord.type  }));
         }
 
         if (email) {
-            toUpdate = "email";
-            const emailExist = await locateAccountByEmail(this.db, email);
-            if (emailExist)
-                return reply.code(400).send(createResponse(400, 'EMAIL_EXISTS'));
+            updateField = "email";
+            const emailExists = await locateAccountByEmail(this.db, email);
+            if (emailExists)
+                return res.code(400).send(createResponse(400, 'EMAIL_EXISTS'));
             this.rabbit.produceMessage({
                 type: 'UPDATE',
-                userId: user.id,
+                userId: account.id,
                 email: email
             }, 'profile.email.updated')
 
-            await modifyAccountEmail(this.db, email, user.id);
+            await modifyAccountEmail(this.db, email, account.id);
         }
-        if (hashedPassword)
-            await modifyAccount(this.db, user.id, hashedPassword);
+        if (hashedPass)
+            await modifyAccount(this.db, account.id, hashedPass);
 
-        return reply.code(200).send(createResponse(200, 'CREDENTIALS_UPDATED', { type: toUpdate }));
-    } catch (error) {
-        console.log(error);
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
+        return res.code(200).send(createResponse(200, 'CREDENTIALS_UPDATED', { type: updateField }));
+    } catch (err) {
+        console.log(err);
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));
     }
 }
 
-export async function confirmCredentialChange(request, reply) {
+/*
+ * Verify 2FA for Credential Change
+ */
+export async function confirmCredentialChange(req, res) {
     
-    const userId = request.user?.id;
+    const accountId = req.user?.id;
     try {
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const pending_credentials = await fetchPendingChangeByAccountId(this.db, user.id);
-        if (!pending_credentials)
-            return reply.code(400).send(createResponse(400, 'NO PENDING_CREDENTIALS'));
+        const pendingCreds = await fetchPendingChangeByAccountId(this.db, account.id);
+        if (!pendingCreds)
+            return res.code(400).send(createResponse(400, 'NO PENDING_CREDENTIALS'));
         
-        const twoFa = await locatePrimaryMfaByAccountId(this.db, user.id);
-        if (!twoFa)
-            return reply.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
-        else if (!twoFa.enabled)
-            return reply.code(400).send(createResponse(400, 'TWOFA_NOT_ENABLED'));
+        const mfaRecord = await locatePrimaryMfaByAccountId(this.db, account.id);
+        if (!mfaRecord)
+            return res.code(400).send(createResponse(400, 'TWOFA_NOT_SET'));
+        else if (!mfaRecord.enabled)
+            return res.code(400).send(createResponse(400, 'TWOFA_NOT_ENABLED'));
         
-        const { otpCode } = request.body;
+        const { otpCode } = req.body;
         if (!otpCode)
-            return reply.code(401).send(createResponse(401, 'OTP_REQUIRED'));
+            return res.code(401).send(createResponse(401, 'OTP_REQUIRED'));
         
-        if (twoFa.type === 'email') {
-            if (twoFa.otp !== otpCode || twoFa.otp_exp < Date.now())
-                return reply.code(401).send(createResponse(401, 'OTP_INVALID'));
+        if (mfaRecord.type === 'email') {
+            if (mfaRecord.otp !== otpCode || mfaRecord.otp_exp < Date.now())
+                return res.code(401).send(createResponse(401, 'OTP_INVALID'));
         } else {
             const isValid = speakeasy.totp.verify({
-                secret: twoFa.secret,
+                secret: mfaRecord.secret,
                 encoding: 'base32',
                 token: otpCode,
                 window: 1
             })
             if (!isValid)
-                return reply.code(401).send(createResponse(401, 'OTP_INVALID'));
+                return res.code(401).send(createResponse(401, 'OTP_INVALID'));
         }
-        await clearOtpCode(this.db, user.id, twoFa.type);
+        await clearOtpCode(this.db, account.id, mfaRecord.type);
 
-        let toUpdate = "";
-        if (pending_credentials.new_email) {
-            toUpdate = "email";
-            const emailExist = await locateAccountByEmail(this.db, pending_credentials.new_email);
-            if (emailExist)
-                return reply.code(400).send(createResponse(400, 'EMAIL_EXISTS'));
+        let updateField = "";
+        if (pendingCreds.new_email) {
+            updateField = "email";
+            const emailExists = await locateAccountByEmail(this.db, pendingCreds.new_email);
+            if (emailExists)
+                return res.code(400).send(createResponse(400, 'EMAIL_EXISTS'));
             this.rabbit.produceMessage({
                 type: 'UPDATE',
-                userId: user.id,
-                email: pending_credentials.new_email
+                userId: account.id,
+                email: pendingCreds.new_email
             }, 'profile.email.updated');
-            await modifyAccountEmail(this.db, pending_credentials.new_email, user.id);
-        } else if (pending_credentials.new_password) {
-            toUpdate = "password";
-            await modifyAccount(this.db, user.id, pending_credentials.new_password);
+            await modifyAccountEmail(this.db, pendingCreds.new_email, account.id);
+        } else if (pendingCreds.new_password) {
+            updateField = "password";
+            await modifyAccount(this.db, account.id, pendingCreds.new_password);
         }
 
-        await removePendingChange(this.db, user.id);
+        await removePendingChange(this.db, account.id);
         
-        return reply.code(200).send(createResponse(200, 'CREDENTIALS_UPDATED', { type: toUpdate }));
-    } catch (error) {
-        console.log(error); 
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));        
+        return res.code(200).send(createResponse(200, 'CREDENTIALS_UPDATED', { type: updateField }));
+    } catch (err) {
+        console.log(err); 
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));        
     }
 }
 
-export async function removeUserAccount(request, reply) {
+/*
+ * Delete User Account
+ */
+export async function removeUserAccount(req, res) {
     
-    const userId = request.user?.id;
+    const accountId = req.user?.id;
     try {
-        const user = await locateAccountById(this.db, userId);
-        if (!user)
-            return reply.code(401).send(createResponse(401, 'UNAUTHORIZED'));
+        const account = await locateAccountById(this.db, accountId);
+        if (!account)
+            return res.code(401).send(createResponse(401, 'UNAUTHORIZED'));
 
-        const targets = ['profile', 'chat', 'notifications', 'relationships'];
-        for (const target of targets) {
+        // Notify all services about account deletion
+        const serviceTargets = ['profile', 'chat', 'notifications', 'relationships'];
+        for (const target of serviceTargets) {
             this.rabbit.produceMessage({
                 type: 'DELETE',
-                userId: user.id
+                userId: account.id
             }, `${target}.user.deleted`);
         }
-        await removeAccount(this.db, user.id);
-        await removeOAuthProvider(this.db, user.id);
-        await this.redis.sRem(`userIds`, `${user.id}`);
-        clearSessionCookies(reply);
+        await removeAccount(this.db, account.id);
+        await removeOAuthProvider(this.db, account.id);
+        await this.redis.sRem(`userIds`, `${account.id}`);
+        clearSessionCookies(res);
 
-        return reply.code(200).send(createResponse(200, 'USER_DATA_DELETED'));
-    } catch (error) {
-        console.log(error); 
-        return reply.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));        
+        return res.code(200).send(createResponse(200, 'USER_DATA_DELETED'));
+    } catch (err) {
+        console.log(err); 
+        return res.code(500).send(createResponse(500, 'INTERNAL_SERVER_ERROR'));        
     }
 }

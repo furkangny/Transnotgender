@@ -57,8 +57,8 @@ export function handleSignIn() {
       const response = await fetch("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
         credentials: "include",
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();

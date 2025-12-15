@@ -1,27 +1,24 @@
-const connectedClients = [];
-let lastSentGameId = 0; // replaces lastMatchId
+/*
+ * Match Activity Route
+ * WebSocket endpoint for recent game activity
+ */
 
-async function pollForNewMatches(db) {
+const activeClients = [];
+let lastProcessedGameId = 0;
+
+async function pollForNewMatches(dbConn) {
     try {
-        // console.log("Polling for new matches...");
+        const countResult = await dbConn.get(`SELECT COUNT(*) as total FROM games`);
 
-        // First, let's check if we can query the database at all
-        const countResult = await db.get(`SELECT COUNT(*) as total FROM games`);
-        // console.log("Total games in database:", countResult.total);
-
-        // Use Promise-based API instead of callback-based
-        const latestRow = await db.get(`SELECT match_id FROM games ORDER BY id DESC LIMIT 1`);
+        const latestRow = await dbConn.get(`SELECT match_id FROM games ORDER BY id DESC LIMIT 1`);
 
         if (!latestRow) {
-            // console.log("No games found in database");
             return;
         }
 
         const latestMatchId = latestRow.match_id;
-        // console.log("Latest match ID:", latestMatchId);
 
-        // Get last two games with that match_id
-        const rows = await db.all(
+        const gameRecords = await dbConn.all(
             `SELECT id, enemy_id, user_id, left_player_score, right_player_score, player_id, game_end_result
        FROM games
        WHERE match_id = ?
@@ -29,39 +26,29 @@ async function pollForNewMatches(db) {
             [latestMatchId]
         );
 
-        if (!rows || rows.length === 0) {
-            // console.log("No games found for match ID:", latestMatchId);
+        if (!gameRecords || gameRecords.length === 0) {
             return;
         }
 
-        // console.log("Found", rows.length, "games for match ID:", latestMatchId);
-
-        // Check if the most recent game was already sent
-        const maxGameId = rows[0].id;
-        if (maxGameId <= lastSentGameId) {
-            // console.log("Game already sent, skipping...");
+        const maxGameId = gameRecords[0].id;
+        if (maxGameId <= lastProcessedGameId) {
             return;
         }
 
-        lastSentGameId = maxGameId; // update tracker
-        // console.log("Sending new game data, game ID:", maxGameId);
+        lastProcessedGameId = maxGameId;
 
-        const payload = rows.map((row) => ({
-            enemyId: row.enemy_id,
-            userId: row.user_id,
-            leftPlayerScore: row.left_player_score,
-            rightPlayerScore: row.right_player_score,
-            playerId: row.player_id,
-            gameEndResult: row.game_end_result,
+        const formattedPayload = gameRecords.map((record) => ({
+            enemyId: record.enemy_id,
+            userId: record.user_id,
+            leftPlayerScore: record.left_player_score,
+            rightPlayerScore: record.right_player_score,
+            playerId: record.player_id,
+            gameEndResult: record.game_end_result,
         }));
 
-        // console.log("Payload to send:", payload);
-        // console.log("Connected clients:", connectedClients.length);
-
-        for (const client of connectedClients) {
+        for (const clientSocket of activeClients) {
             try {
-                client.send(JSON.stringify(payload));
-                // console.log("Sent data to client");
+                clientSocket.send(JSON.stringify(formattedPayload));
             } catch (err) {
                 console.error("WebSocket send error:", err.message);
             }
@@ -71,27 +58,19 @@ async function pollForNewMatches(db) {
     }
 }
 
-// This is the function you will import
-export default function matchActivity(connection, req, db) {
-    // console.log("Initializing recentActivity function..."); // Log initialization
-    connectedClients.push(connection);
+export default function matchActivity(wsConnection, req, dbConn) {
+    activeClients.push(wsConnection);
 
-    // console.log("Recent activity client connected");
-
-    connection.on("message", (msg) => {
-        // console.log("Message from client:", msg.toString());
+    wsConnection.on("message", (msg) => {
     });
 
-    connection.on("close", () => {
-        // console.log("Recent activity client disconnected");
-        const idx = connectedClients.indexOf(connection);
-        if (idx !== -1) connectedClients.splice(idx, 1);
+    wsConnection.on("close", () => {
+        const idx = activeClients.indexOf(wsConnection);
+        if (idx !== -1) activeClients.splice(idx, 1);
     });
 
-    // console.log("Setting up polling interval..."); // Log setInterval setup
-
-    connection.on("error", (err) => {
-        console.error("Webconnection error:", err);
+    wsConnection.on("error", (err) => {
+        console.error("WebSocket connection error:", err);
     });
 }
 
