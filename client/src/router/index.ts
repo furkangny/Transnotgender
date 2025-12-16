@@ -25,6 +25,7 @@ import { Tournaments } from "@/components/game/Tournaments";
 import { getUserProfile } from "@/services/get-user-profile";
 import { startNotificationListener } from "@/services/notifications-service";
 import { stopDashboardListener } from "@/services/dashboard-service";
+import { stopRecentActivityListener } from "@/services/recent-activity-service";
 import { startStatusListener } from "@/services/status-service";
 import { getCurrentUser, setCurrentUser } from "@/utils/user-store";
 import { navigateTo } from "@/utils/navigate-to-link";
@@ -189,6 +190,10 @@ export async function router(): Promise<void> {
 
   if (path !== "chamber") {
     stopDashboardListener();
+  }
+
+  if (path !== "salon") {
+    stopRecentActivityListener();
   }
 
   if (path !== "remote") {

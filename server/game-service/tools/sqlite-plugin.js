@@ -26,7 +26,7 @@ const GAMES_TABLE_SQL = `CREATE TABLE IF NOT EXISTS games (
   matchWon INTEGER NOT NULL,
   matchLost INTEGER NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(created_at, player_id)
+  UNIQUE(match_id, player_id)
 )`;
 
 async function sqlitePlugin(fastify, opts) {

@@ -1,5 +1,11 @@
 import WebSocket from 'ws';
 
+// Canvas dimensions - must match client
+const CANVAS_WIDTH = 900;
+const CANVAS_HEIGHT = 450;
+const PADDLE_HEIGHT = 100;
+const PADDLE_WIDTH = 10;
+
 function gameLogic(gameState) {
     // Don't process game logic if countdown is active
     if (gameState.countdownActive) {
@@ -16,7 +22,7 @@ function gameLogic(gameState) {
     if (
         gameState.keypressd === "s" &&
         gameState.playerId === 1 &&
-        gameState.paddleLeftY < 600 - 100
+        gameState.paddleLeftY < CANVAS_HEIGHT - PADDLE_HEIGHT
     )
         gameState.paddleLeftY += step;
 
@@ -29,22 +35,24 @@ function gameLogic(gameState) {
     if (
         gameState.keypressd === "s" &&
         gameState.playerId === 2 &&
-        gameState.paddelRightY < 600 - 100
+        gameState.paddelRightY < CANVAS_HEIGHT - PADDLE_HEIGHT
     )
         gameState.paddelRightY += step;
 
     gameState.keypressd = "";
 
+    // Right paddle collision detection
+    const rightPaddleX = CANVAS_WIDTH - PADDLE_WIDTH - 10;
     if (
         gameState.flagX ||
-        (gameState.ballX >= 980 &&
+        (gameState.ballX >= rightPaddleX &&
             gameState.ballY >= gameState.paddelRightY &&
-            gameState.ballY <= gameState.paddelRightY + 100)
+            gameState.ballY <= gameState.paddelRightY + PADDLE_HEIGHT)
     ) {
         if (
-            gameState.ballX >= 980 &&
+            gameState.ballX >= rightPaddleX &&
             gameState.ballY >= gameState.paddelRightY &&
-            gameState.ballY <= gameState.paddelRightY + 100
+            gameState.ballY <= gameState.paddelRightY + PADDLE_HEIGHT
         ) {
             gameState.hitCount++;
             if (gameState.hitCount === 2) {
@@ -55,35 +63,38 @@ function gameLogic(gameState) {
         }
         (gameState.ballX -= gameState.ballSpeed), (gameState.flagX = true);
     }
+    
+    // Left paddle collision detection
+    const leftPaddleX = PADDLE_WIDTH + 10;
     if (
         !gameState.flagX ||
-        (gameState.ballX <= 20 &&
+        (gameState.ballX <= leftPaddleX &&
             gameState.ballY >= gameState.paddleLeftY &&
-            gameState.ballY <= gameState.paddleLeftY + 100)
+            gameState.ballY <= gameState.paddleLeftY + PADDLE_HEIGHT)
     ) {
         if (
-            gameState.ballX <= 20 &&
+            gameState.ballX <= leftPaddleX &&
             gameState.ballY >= gameState.paddleLeftY &&
-            gameState.ballY <= gameState.paddleLeftY + 100
+            gameState.ballY <= gameState.paddleLeftY + PADDLE_HEIGHT
         )
             gameState.leftPlayerBallHit++;
         (gameState.ballX += gameState.ballSpeed), (gameState.flagX = false);
     }
 
-    if (gameState.ballY >= 600 || gameState.flagY)
+    if (gameState.ballY >= CANVAS_HEIGHT || gameState.flagY)
         (gameState.ballY -= gameState.ballSpeed), (gameState.flagY = true);
     if (gameState.ballY <= 0 || !gameState.flagY)
         (gameState.ballY += gameState.ballSpeed), (gameState.flagY = false);
 
     // Check for scoring and trigger countdown
-    if (gameState.ballX > 1000 || gameState.ballX <= 0) {
-        if (gameState.ballX > 1000) gameState.leftPlayerScore += 1;
+    if (gameState.ballX > CANVAS_WIDTH || gameState.ballX <= 0) {
+        if (gameState.ballX > CANVAS_WIDTH) gameState.leftPlayerScore += 1;
         if (gameState.ballX <= 0) gameState.rightPlayerScore += 1;
 
-        gameState.paddleLeftY = 240;
-        gameState.paddelRightY = 240;
-        gameState.ballX = 500;
-        gameState.ballY = 300;
+        gameState.paddleLeftY = (CANVAS_HEIGHT - PADDLE_HEIGHT) / 2;
+        gameState.paddelRightY = (CANVAS_HEIGHT - PADDLE_HEIGHT) / 2;
+        gameState.ballX = CANVAS_WIDTH / 2;
+        gameState.ballY = CANVAS_HEIGHT / 2;
         gameState.ballSpeed = 3;
         gameState.hitCount = 0;
         gameState.flagX = Math.random() < 0.5;  // Rastgele yön

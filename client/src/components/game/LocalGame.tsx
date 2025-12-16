@@ -21,8 +21,8 @@ export function LocalGame() {
     document.documentElement.clientHeight || 0,
     window.innerHeight || 0
   );
-  const canvasWidth = Math.min(1000, vw * 0.9);
-  const canvasHeight = Math.min(500, vh * 0.55);
+  const canvasWidth = Math.min(1000, vw * 0.95);
+  const canvasHeight = Math.min(600, vh * 0.7);
 
   // Prevent page scroll during game
   document.body.style.overflow = "hidden";

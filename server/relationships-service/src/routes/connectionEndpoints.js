@@ -4,11 +4,11 @@
  */
 import { initiateConnection, approveConnection, declineConnection, terminateConnection, fetchConnections, fetchPendingConnections } from "../controllers/connectionManager.js";
 import { validateToken } from "../middleware/tokenGuard.js";
-import { connectionRequestSchema, friendIdSchema } from "../schemas/connectionSchemas.js";
+import { connectionRequestSchema, connectionDecisionSchema, friendIdSchema } from "../schemas/connectionSchemas.js";
 
 async function connectionEndpoints(fastify) {
     /* Send friend request */
-    fastify.post('/', {
+    fastify.post('/request', {
         schema: {
             body: connectionRequestSchema
         },
@@ -19,7 +19,7 @@ async function connectionEndpoints(fastify) {
     /* Accept friend request */
     fastify.post('/accept', {
         schema: {
-            body: connectionRequestSchema
+            body: connectionDecisionSchema
         },
         preHandler: validateToken,
         handler: approveConnection
@@ -28,7 +28,7 @@ async function connectionEndpoints(fastify) {
     /* Reject friend request */
     fastify.post('/reject', {
         schema: {
-            body: connectionRequestSchema
+            body: connectionDecisionSchema
         },
         preHandler: validateToken,
         handler: declineConnection

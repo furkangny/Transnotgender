@@ -153,8 +153,8 @@ export async function Chat(friendId: number) {
           isMe ? "items-end" : "items-start"
         }`;
         msgDiv.innerHTML = `
-	  <span class="${isMe ? "bg-pong-dark-primary" : "bg-[#BFBEAE]"} 
-	                  text-pong-primary px-4 py-2 rounded-lg shadow-sm max-w-[70%] break-words overflow-hidden text-wrap normal-case">
+	  <span class="${isMe ? "bg-pong-dark-primary text-black" : "bg-[#BFBEAE] text-gray-900"} 
+	                  px-4 py-2 rounded-lg shadow-sm max-w-[70%] break-words overflow-hidden text-wrap normal-case">
 	    ${msg.content}
 	  </span>
 

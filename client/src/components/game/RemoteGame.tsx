@@ -21,8 +21,8 @@ export function RemoteGame() {
     document.documentElement.clientHeight || 0,
     window.innerHeight || 0
   );
-  const canvasWidth = Math.min(1000, vw * 0.9);
-  const canvasHeight = Math.min(500, vh * 0.55);
+  const canvasWidth = Math.min(900, vw * 0.85);
+  const canvasHeight = Math.min(450, vh * 0.5);
 
   // Prevent page scroll during game
   document.body.style.overflow = "hidden";
@@ -189,7 +189,7 @@ export function RemoteGame() {
       socket,
       userName,
       roomdIdentif,
-    });
+    }, canvas.width, canvas.height);
 
     socket.onopen = () => {
       //   console.log(
@@ -386,8 +386,8 @@ class FlowField {
   private ctx: CanvasRenderingContext2D;
   private width: number = 10;
   private height: number = 100;
-  private canvasWidth: number = 1000;
-  private canvasHeight: number = 600;
+  private canvasWidth: number;
+  private canvasHeight: number;
   private keys: Record<string, boolean>;
   private gameState: GameState;
   private deps: FlowFieldDependencies;
@@ -395,21 +395,25 @@ class FlowField {
   constructor(
     ctx: CanvasRenderingContext2D,
     keys: Record<string, boolean>,
-    dependencies: FlowFieldDependencies
+    dependencies: FlowFieldDependencies,
+    canvasWidth: number,
+    canvasHeight: number
   ) {
     this.ctx = ctx;
     this.keys = keys;
     this.deps = dependencies;
+    this.canvasWidth = canvasWidth;
+    this.canvasHeight = canvasHeight;
     this.gameState = {
       matchId: "",
       playerId: 0,
-      ballX: 500,
-      ballY: 300,
+      ballX: canvasWidth / 2,
+      ballY: canvasHeight / 2,
       ballSpeed: 3,
       flagX: false,
       flagY: false,
-      paddleLeftY: 240,
-      paddelRightY: 240,
+      paddleLeftY: (canvasHeight - 100) / 2,
+      paddelRightY: (canvasHeight - 100) / 2,
       keypressd: "",
       disconnected: false,
       leftPlayerScore: 0,
@@ -525,14 +529,14 @@ class FlowField {
     // Right paddle
     this.ctx.fillStyle = "#E05E4B";
     this.ctx.fillRect(
-      980,
+      this.canvasWidth - this.width - 10,
       this.gameState.paddelRightY,
       this.width,
       this.height
     );
     this.ctx.strokeStyle = "#E05E4B";
     this.ctx.strokeRect(
-      980,
+      this.canvasWidth - this.width - 10,
       this.gameState.paddelRightY,
       this.width,
       this.height
@@ -622,14 +626,14 @@ class FlowField {
     // Right paddle
     this.ctx.fillStyle = "#E05E4B";
     this.ctx.fillRect(
-      980,
+      this.canvasWidth - this.width - 10,
       this.gameState.paddelRightY,
       this.width,
       this.height
     );
     this.ctx.strokeStyle = "#E05E4B";
     this.ctx.strokeRect(
-      980,
+      this.canvasWidth - this.width - 10,
       this.gameState.paddelRightY,
       this.width,
       this.height
