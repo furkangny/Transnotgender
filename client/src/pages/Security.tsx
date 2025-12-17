@@ -21,8 +21,8 @@ export function Security() {
       <div className="w-full relative">
         <main className={styles.pageContent}>
           <SecondaryHeader
-            title="Security & Access"
-            subtitle="Manage your credentials and protect your club profile."
+            title="Güvenlik Ayarları"
+            subtitle="Giriş bilgilerinizi yönetin ve profilinizi koruyun."
           />
 
           {isNotRemoteUser ? (
@@ -35,9 +35,8 @@ export function Security() {
             <div className={styles.cardOneStyle}>
               <p className="text-white/80 text-sm sm:text-base leading-relaxed">
                 <i className="fa-solid fa-circle-exclamation text-pong-warning mr-2"></i>
-                As a remote player, password, email, and 2FA settings are
-                managed externally. For security reasons, these fields are
-                locked.
+                Uzaktan oyuncu olarak, parola, e-posta ve 2FA ayarları harici olarak yönetilir. 
+                Güvenlik nedenleriyle bu alanlar kilitlenmiştir.
               </p>
             </div>
           )}

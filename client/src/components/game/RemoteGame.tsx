@@ -68,21 +68,21 @@ export function RemoteGame() {
     <div id="controls-guide" class="flex flex-col items-center justify-center mt-4 z-50">
       <h3 class="text-lg font-bold mb-2">Controls</h3>
       <ul class="text-base space-y-1 font-orbitron">
-        <li><strong>W</strong>: Move Paddle Up</li>
-        <li><strong>S</strong>: Move Paddle Down</li>
+        <li><strong>W</strong>: YUKARI HAREKET</li>
+        <li><strong>S</strong>: AŞAĞI HAREKET</li>
       </ul>
     </div>
 
     <div id="gameTab" class="game-tab ${styles.gameTab} hidden">
       <div class="flex flex-col items-center justify-center h-full px-20 py-4">
-        <h1 class="text-5xl font-bold text-pong-dark-secondary">GAME OVER</h1>
+        <h1 class="text-5xl font-bold text-pong-dark-secondary">OYUN BİTTİ</h1>
         <h1 id="result" class="text-2xl mt-2 text-amber-50">WON</h1>
-        <button id="restartButton" class="game-btn text-white mt-6 font-bold py-3 px-8 rounded-xl text-lg md:text-xl shadow-md tracking-wide transition-all duration-300">PLAY AGAIN</button>
+        <button id="restartButton" class="game-btn text-white mt-6 font-bold py-3 px-8 rounded-xl text-lg md:text-xl shadow-md tracking-wide transition-all duration-300">YENİDEN OYNA</button>
       </div>
     </div>
     <div id="disconnected" class="game-tab ${styles.gameTab} hidden">
       <div class="flex flex-col items-center justify-center h-full px-20 py-4">
-        <h1 class="text-5xl font-bold text-pong-dark-secondary">GAME OVER</h1>
+        <h1 class="text-5xl font-bold text-pong-dark-secondary">OYUN BİTTİ</h1>
         <h1 id="disconnected" class="text-2xl mt-2"> DISCONNECTED</h1>
       </div>
     </div>
@@ -694,10 +694,10 @@ class FlowField {
       this.gameState = parsedData;
       if (this.gameState.playerId === 1) {
         this.deps.playerSide.innerText =
-          "YOU ARE ON THE LEFT SIDE - GRAY PADDLE";
+          "SOL TARAFTASINIZ - GRI";
       } else if (this.gameState.playerId === 2) {
         this.deps.playerSide.innerText =
-          "YOU ARE ON THE RIGHT SIDE - RED PADDLE";
+          "SAĞ TARAFTASINIZ - KIRMIZI";
       }
       this.deps.rightPlayerScore.textContent = String(
         this.gameState.rightPlayerScore

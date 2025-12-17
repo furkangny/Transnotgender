@@ -80,7 +80,7 @@ export async function loadChatList() {
   const friendIds = await getFriends();
 
   if (!friendIds.length) {
-    chatListElement.innerHTML = `<li class="text-pong-dark-secondary text-center py-2 text-sm md:text-lg">No clubmates to chat with yet — send a friend request to start the rally!</li>`;
+    chatListElement.innerHTML = `<li class="text-pong-dark-secondary text-center py-2 text-sm md:text-lg">Henüz sohbet edebileceğiniz kulüp arkadaşınız yok!</li>`;
     return;
   }
 

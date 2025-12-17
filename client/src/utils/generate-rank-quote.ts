@@ -1,7 +1,7 @@
 export function generateRankQuote(rank: number): string {
   const quotes = {
     champion: [
-  "Kulüp Şampiyonu oldun — masalar adını duyunca titriyor.",
+  "Birkaç oyun kazanmak yetmez!",
   "Sahayı fethettin — gerçek bir Kulüp Şampiyonu.",
   "Zafer peşini bırakmıyor. Kulüp Şampiyonu sonsuza dek.",
     ],
